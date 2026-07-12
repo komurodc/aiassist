@@ -1,0 +1,1984 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIアシスト ｜ 診療記録フロー プロトタイプ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --header:#26408e;          /* GMOブルー系ヘッダー */
+    --header-dark:#1c3174;
+    --accent:#2a6fdb;          /* アクセントブルー */
+    --rec-red:#e23b30;         /* 音声入力（録音）ボタン */
+    --run-orange:#f5821f;      /* 実行ボタン */
+    --teal:#1aa3a3;
+    --ink:#1f2733;
+    --muted:#6b7686;
+    --line:#dfe3eb;
+    --panel:#ffffff;
+    --bg:#eef1f5;
+    --soft:#f5f7fa;
+    --s:#3a7bd5; --o:#7a5bd1; --a:#d18a1a; --p:#2f9e6f;
+    --shadow:0 1px 3px rgba(20,30,60,.08),0 8px 24px rgba(20,30,60,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Noto Sans JP",-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    background:var(--bg);color:var(--ink);font-size:14px;line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* ---------- header ---------- */
+  header.topbar{
+    background:linear-gradient(180deg,var(--header) 0%,var(--header-dark) 100%);
+    color:#fff;display:flex;align-items:center;gap:18px;
+    padding:0 18px;height:56px;position:sticky;top:0;z-index:50;
+  }
+  .logo{display:flex;align-items:baseline;gap:1px;font-weight:700;letter-spacing:.3px;white-space:nowrap}
+  .logo .ph-logo{color:#fff;font-size:16px;font-weight:700;letter-spacing:.5px}
+  .search{flex:0 0 280px;background:#fff;border-radius:7px;height:34px;display:flex;align-items:center;gap:8px;padding:0 12px;color:#9aa3b2}
+  .search svg{width:15px;height:15px;flex:0 0 auto}
+  .search input{border:0;outline:0;width:100%;font-size:13px;font-family:inherit;color:#333}
+  nav.main{display:flex;align-items:center;gap:4px;margin-left:6px}
+  nav.main a{color:#dfe5ff;text-decoration:none;font-size:13px;padding:7px 11px;border-radius:6px;white-space:nowrap}
+  nav.main a.active{background:rgba(255,255,255,.16);color:#fff;font-weight:500}
+  .right-tools{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .pill{display:flex;align-items:center;gap:6px;background:#fff;color:var(--header);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:500}
+  .pill.amber{color:#b8860b}
+  .ico{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;color:#cfd8ff}
+  .ico svg{width:17px;height:17px}
+  .doctor{display:flex;align-items:center;gap:6px;font-size:13px;color:#fff;padding-left:6px}
+  .doctor .av{width:24px;height:24px;border-radius:50%;background:#5870c4;display:grid;place-items:center;font-size:11px}
+  /* ---------- layout ---------- */
+  .wrap{max-width:1280px;margin:0 auto;padding:16px}
+  .titlebar{display:flex;align-items:center;gap:12px;margin:2px 4px 14px}
+  .titlebar h1{font-size:18px;margin:0;font-weight:700}
+  .titlebar .sub{color:var(--accent);font-size:12px;text-decoration:underline;cursor:default}
+  .proto-badge{margin-left:auto;background:#fff3df;color:#b76b00;border:1px solid #f3d7a6;border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700}
+  .hintbar{background:#eaf2ff;border:1px solid #c9def8;color:#27497e;border-radius:10px;padding:10px 14px;font-size:12.5px;margin:0 4px 16px;display:flex;gap:8px;align-items:flex-start}
+  .hintbar svg{flex:0 0 auto;width:16px;height:16px;margin-top:2px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:980px){.cols{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+  .panel-h{padding:12px 16px;border-bottom:1px solid var(--line);font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:8px;background:#fbfcfe}
+  .panel-h .n{width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;display:grid;place-items:center;font-weight:700}
+  .panel-b{padding:16px}
+  /* ---------- step blocks ---------- */
+  .step{border:1px solid var(--line);border-radius:11px;margin-bottom:14px;overflow:hidden;transition:.25s}
+  .step.locked{opacity:.55}
+  .step.done{border-color:#bfe6cf}
+  .step-h{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--soft);cursor:default}
+  .step-h .badge{width:24px;height:24px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;font-size:12px;font-weight:700;background:#dfe3eb;color:#5a6577}
+  .step.active .step-h .badge{background:var(--accent);color:#fff}
+  .step.done .step-h .badge{background:#2f9e6f;color:#fff}
+  .step-h .t{font-weight:700;font-size:13.5px}
+  .step-h .t small{display:block;font-weight:400;color:var(--muted);font-size:11px;margin-top:1px}
+  .step-h .chk{margin-left:auto;font-size:11px;color:#2f9e6f;font-weight:700;display:none}
+  .step.done .chk{display:block}
+  .step-b{padding:14px}
+  label.fld{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:500}
+  .row2{display:flex;gap:10px}
+  .row2 > div{flex:1}
+  input.tx,textarea.tx{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-family:inherit;font-size:13px;color:var(--ink);outline:none;resize:vertical;background:#fff}
+  input.tx:focus,textarea.tx:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(42,111,219,.12)}
+  textarea.tx{min-height:96px;line-height:1.55}
+  /* recorder */
+  .rec-zone{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .btn{border:0;border-radius:8px;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;padding:10px 16px;display:inline-flex;align-items:center;gap:8px;transition:.15s}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn-rec{background:var(--rec-red);color:#fff}
+  .btn-rec:hover:not(:disabled){background:#cf3127}
+  .btn-rec.recording{background:#fff;color:var(--rec-red);border:1.5px solid var(--rec-red)}
+  .btn-rec svg{width:15px;height:15px}
+  .btn-run{background:var(--run-orange);color:#fff}
+  .btn-run:hover:not(:disabled){background:#e0750f}
+  .btn-ghost{background:#fff;color:var(--accent);border:1.5px solid #bcd3f5}
+  .btn-ghost:hover:not(:disabled){background:#f1f6ff}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--rec-red)}
+  .recording .dot,.live-dot{animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  .timer{font-variant-numeric:tabular-nums;font-weight:700;color:var(--rec-red);font-size:14px;display:none;align-items:center;gap:7px}
+  .timer.on{display:inline-flex}
+  .live-dot{width:9px;height:9px;border-radius:50%;background:var(--rec-red)}
+  .mini-note{font-size:11.5px;color:var(--muted);margin-top:8px}
+  .transcript-wrap{margin-top:12px;display:none}
+  .transcript-wrap.on{display:block}
+  /* prompt selector */
+  .prompt-sel-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  select.prompt-sel{flex:1;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-family:inherit;font-size:13px;color:var(--ink);background:#fff;outline:none}
+  select.prompt-sel:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(42,111,219,.12)}
+  .gear{width:36px;height:36px;flex:0 0 auto;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;color:var(--muted);font-size:15px}
+  textarea.prompt-text{min-height:78px;background:#fafbfd;font-size:12px;color:#56607a;line-height:1.5}
+  .prompt-tip{font-size:11px;color:var(--muted);margin:6px 0 2px}
+  /* 治療説明サマリーのセクション表示 */
+  .osec{border:1px solid var(--line);border-left-width:4px;border-radius:10px;margin:10px 0;overflow:hidden}
+  .osec:first-child{margin-top:0}
+  .osec-h{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--soft);font-weight:700;font-size:12.5px}
+  .osec-ic{font-size:15px;line-height:1}
+  .osec-b{padding:10px 12px;font-size:12.5px;line-height:1.75;color:var(--ink)}
+  /* 医学的注意事項カード（選択チップ） */
+  .med-card .card-h{background:#fdf0ee}
+  .med-g{margin-bottom:11px}
+  .med-g:last-of-type{margin-bottom:4px}
+  .med-g-t{font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:11.5px;cursor:pointer;background:#fff;color:#56607a;user-select:none;transition:.12s;line-height:1.2}
+  .chip:hover{border-color:#b9c4d6}
+  .chip.on{background:#fdeceb;border-color:#e6a59e;color:#c0392b;font-weight:700}
+  .chip.on::before{content:'✓ '}
+  .med-auto{font-size:10.5px;color:#c0392b;background:#fdeceb;border-radius:5px;padding:1px 6px;margin-left:6px;font-weight:700}
+  .med-select{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-family:inherit;font-size:12.5px;color:var(--ink);background:#fff;outline:none}
+  .med-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(42,111,219,.12)}
+  .med-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .med-empty{font-size:11.5px;color:var(--muted)}
+  .chip .x{margin-left:7px;opacity:.55;font-size:10px}
+  .chip:hover .x{opacity:1}
+  .chip .med-auto{padding:0 5px;font-size:9px}
+  .med-add-row{display:flex;gap:8px;margin-top:8px}
+  .med-free{flex:1}
+  .med-addbtn{padding:8px 14px;white-space:nowrap}
+  /* 設定画面 */
+  .settings-overlay{position:fixed;inset:0;background:rgba(18,26,46,.5);display:none;z-index:200;justify-content:center;padding:28px 16px;overflow:auto}
+  .settings-overlay.show{display:flex}
+  .settings-modal{background:#fff;border-radius:14px;width:100%;max-width:680px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;margin:auto;display:flex;flex-direction:column;max-height:90vh}
+  .settings-head{display:flex;align-items:center;justify-content:space-between;padding:15px 20px;border-bottom:1px solid var(--line);font-weight:700;font-size:16px;background:#fbfcfe;flex:0 0 auto}
+  .settings-close{border:1px solid var(--line);background:#fff;font-size:12.5px;cursor:pointer;color:var(--ink);line-height:1;padding:7px 12px;border-radius:8px;font-family:inherit}
+  .settings-close:hover{background:#f1f4f8}
+  .settings-tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);padding:0 8px;overflow-x:auto;background:#fbfcfe;flex:0 0 auto}
+  .settings-tab{border:0;background:none;padding:12px 14px;font-family:inherit;font-size:12.5px;color:var(--muted);cursor:pointer;border-bottom:2.5px solid transparent;white-space:nowrap}
+  .settings-tab:hover{color:var(--ink)}
+  .settings-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:700}
+  .settings-panel{display:none}
+  .settings-panel.active{display:block}
+  .staff-fields{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .staff-role{flex:0 0 140px}
+  .staff-pin{flex:1;min-width:130px}
+  .staff-add{display:flex;gap:8px;flex-wrap:wrap;border:1px dashed #b9c4d6;background:#f7f9fc;border-radius:10px;padding:12px;margin-top:6px}
+  .staff-add #staffNewName{flex:2;min-width:160px}
+  .staff-add #staffNewRole{flex:0 0 140px}
+  .staff-add #staffNewPin{flex:1;min-width:120px}
+  .staff-role-badge{font-size:10.5px;font-weight:700;color:#1f5fb0;background:#eef4fd;border:1px solid #cfe0fb;border-radius:999px;padding:1px 9px;margin-left:8px;vertical-align:middle}
+  .prompt-edit{width:100%;min-height:120px;resize:vertical;line-height:1.6;font-size:12px}
+  .data-h{font-weight:700;font-size:13px;margin-bottom:8px}
+  .data-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:var(--muted);margin-top:12px;flex-wrap:wrap}
+  .data-bar{height:10px;background:#eef1f6;border-radius:999px;overflow:hidden}
+  .data-bar-in{height:100%;border-radius:999px;transition:width .2s}
+  .sync-test{display:flex;align-items:center;gap:7px;margin-top:12px;font-size:11.5px;color:var(--muted);cursor:pointer}
+  .sync-test input{width:15px;height:15px}
+  .settings-body{padding:20px;overflow:auto;flex:1 1 auto;min-height:0}
+  .settings-body section{margin-bottom:24px}
+  .settings-body section:last-child{margin-bottom:0}
+  .settings-body h3{font-size:13.5px;margin:0 0 4px}
+  .sec-hint{font-size:11.5px;color:var(--muted);margin:0 0 12px}
+  .set-flds{display:flex;gap:12px;flex-wrap:wrap}
+  .set-flds > div{flex:1;min-width:200px}
+  .set-group{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+  .set-grow{display:flex;gap:8px;align-items:center;margin-bottom:9px}
+  .set-gname{flex:1;border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-family:inherit;font-size:12.5px;font-weight:700;color:var(--ink);outline:none}
+  .set-gname:focus{border-color:var(--accent)}
+  .set-delg{border:1px solid #e6c0bb;color:#c0392b;background:#fff;border-radius:7px;font-size:11px;padding:6px 10px;cursor:pointer;font-family:inherit;white-space:nowrap}
+  .set-items{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px;min-height:4px}
+  .set-list{display:flex;flex-direction:column;gap:5px;margin-bottom:9px}
+  .set-row{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;background:#fff}
+  .set-row-label{flex:1;font-size:12.5px;color:var(--ink)}
+  .set-row-x{border:0;background:none;color:#c0392b;cursor:pointer;font-size:12px;opacity:.65;line-height:1}
+  .set-row-x:hover{opacity:1}
+  .set-move{display:flex;flex-direction:column;gap:1px;flex:0 0 auto}
+  .set-move button{border:1px solid var(--line);background:#fff;border-radius:4px;width:22px;height:15px;line-height:1;font-size:8px;cursor:pointer;color:var(--muted);padding:0;display:grid;place-items:center}
+  .set-move button:hover:not(:disabled){background:#eef3fd;color:var(--accent);border-color:#bcd3f5}
+  .set-move button:disabled{opacity:.3;cursor:default}
+  .set-chip .x{cursor:pointer}
+  .set-addrow{display:flex;gap:8px}
+  .set-add{flex:1}
+  .set-addrow .btn-ghost{padding:8px 14px;white-space:nowrap}
+  .set-addgroup{border:1px dashed #b9c4d6;background:#f7f9fc;color:var(--accent);border-radius:8px;padding:10px;width:100%;cursor:pointer;font-family:inherit;font-weight:700;font-size:12.5px}
+  .settings-foot{padding:13px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;background:#fbfcfe;flex:0 0 auto}
+  /* A4書き出しシート（1ページ固定・内容に応じて文字を自動縮小） */
+  #a4sheet{position:fixed;left:-99999px;top:0}
+  .a4-page{width:794px;height:1123px;background:#fff;color:#1f2733;padding:40px 48px;box-sizing:border-box;font-family:"Noto Sans JP",sans-serif;overflow:hidden;font-size:calc(13px * var(--k,1))}
+  .a4-content{transform-origin:top left}
+  .a4-pt{font-size:1.12em;font-weight:700;margin:0 0 4px;background:#f4f7fc;border:1px solid #dfe3eb;border-radius:8px;padding:0.7em 1em}
+  .a4-stitle{font-size:1em;font-weight:700;color:#26408e;border-left:4px solid #26408e;padding-left:8px;margin:1.2em 0 .6em}
+  .a4-soap{display:flex;border:1px solid #dfe3eb;border-bottom:none}
+  .a4-soap:last-child{border-bottom:1px solid #dfe3eb}
+  .a4-soap-k{width:3em;background:#26408e;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:1.12em;flex:0 0 auto}
+  .a4-soap-v{padding:.6em .9em;font-size:.96em;line-height:1.65}
+  .a4-sec{border:1px solid #dfe3eb;border-left:4px solid #2f6fd6;border-radius:6px;margin-bottom:.5em;overflow:hidden}
+  .a4-sec-t{background:#f4f7fc;padding:.5em .8em;font-weight:700;font-size:.92em}
+  .a4-sec-b{padding:.55em .8em;font-size:.92em;line-height:1.6}
+  .a4-text{font-size:.96em;line-height:1.75;border:1px solid #dfe3eb;border-radius:6px;padding:.8em 1em}
+  .a4-block{margin-top:.9em}
+  .a4-block h3{font-size:.96em;margin:0 0 .5em;color:#26408e;border-left:4px solid #26408e;padding-left:8px}
+  .a4-block.warn h3{color:#c0392b;border-left-color:#c0392b}
+  .a4-kv{font-size:.92em;line-height:1.75}
+  .a4-tags{display:flex;flex-wrap:wrap;gap:6px}
+  .a4-tags span{border:1px solid #e6a59e;background:#fdeceb;color:#c0392b;border-radius:999px;padding:.2em .8em;font-size:.85em;font-weight:700}
+  .a4-modal{background:#fff;border-radius:14px;width:100%;max-width:880px;box-shadow:0 20px 60px rgba(0,0,0,.3);margin:auto;display:flex;flex-direction:column;max-height:92vh;overflow:hidden}
+  .a4-preview-wrap{overflow:auto;background:#e9edf3;padding:16px;flex:1}
+  .a4-preview-wrap .a4-page{box-shadow:0 4px 18px rgba(0,0,0,.18)}
+  /* ホーム / 患者リスト */
+  .home-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:4px 2px 16px}
+  .home-sub{color:var(--muted);font-size:12.5px;margin:4px 0 0}
+  .btn-new{background:var(--accent);color:#fff;border:0;border-radius:9px;font-family:inherit;font-weight:700;font-size:13px;padding:11px 18px;cursor:pointer;white-space:nowrap}
+  .btn-new:hover{background:#225fc0}
+  .pl-list{display:flex;flex-direction:column;gap:9px}
+  .pl-row{display:flex;align-items:center;gap:13px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 16px;cursor:pointer;box-shadow:var(--shadow);transition:.12s}
+  .pl-row:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .pl-av{width:40px;height:40px;border-radius:50%;background:#e9f1fc;color:var(--accent);display:grid;place-items:center;font-weight:700;font-size:16px;flex:0 0 auto}
+  .pl-main{flex:1;min-width:0}
+  .pl-name{font-weight:700;font-size:14px}
+  .pl-no{font-weight:400;color:var(--muted);font-size:11.5px;margin-left:6px}
+  .pl-meta{font-size:12px;color:var(--muted);margin-top:2px}
+  .pl-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+  .pl-tags span{border:1px solid #e6a59e;background:#fdeceb;color:#c0392b;border-radius:999px;padding:1px 9px;font-size:10.5px;font-weight:700}
+  .pl-arrow{color:#c2cad6;font-size:22px;flex:0 0 auto}
+  .pl-del{flex:0 0 auto;border:1px solid var(--line);background:#fff;border-radius:8px;width:34px;height:34px;font-size:15px;cursor:pointer;color:#c0392b;line-height:1}
+  .pl-del:hover{background:#fdeceb;border-color:#e6c0bb}
+  .pl-row.draft{border-left:4px solid #e0a13a;background:#fffdf7}
+  .pl-av.draft{background:#fdf0db;color:#b8801f}
+  .pl-badge{font-size:10px;font-weight:700;border-radius:999px;padding:1px 8px;margin-left:8px;vertical-align:middle}
+  .pl-badge.draft{background:#fdf0db;color:#b8801f;border:1px solid #efce93}
+  .pl-badge.done{background:#eafaf3;color:#1f8a5b;border:1px solid #bfe6cf}
+  /* 直接編集（contenteditable） */
+  .edit{cursor:text;border-radius:5px;transition:background .1s}
+  .edit:hover{background:#f3f7fd}
+  .edit:focus{outline:2px solid #bcd3f5;outline-offset:1px;background:#fff}
+  .soap-val.edit:empty:before,.osec-b.edit:empty:before{content:'（入力）';color:#aab2c0}
+  .edit-hint{font-size:11.5px;color:#1f5fb0;background:#eef4fd;border:1px solid #cfe0fb;border-radius:8px;padding:7px 11px;margin-bottom:12px}
+  /* 通知 */
+  .notif-badge{position:absolute;top:-3px;right:-4px;background:#e23b30;color:#fff;font-size:9px;font-weight:700;min-width:15px;height:15px;border-radius:999px;display:grid;place-items:center;padding:0 3px;border:1.5px solid var(--header)}
+  .notif-overlay{position:fixed;inset:0;display:none;z-index:150}
+  .notif-overlay.show{display:block}
+  .notif-panel{position:absolute;top:54px;right:14px;width:340px;max-width:calc(100vw - 24px);background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 16px 50px rgba(0,0,0,.25);overflow:hidden}
+  .notif-head{display:flex;align-items:center;justify-content:space-between;padding:12px 15px;border-bottom:1px solid var(--line);font-weight:700;font-size:14px;background:#fbfcfe}
+  .notif-list-empty{padding:26px 16px;text-align:center;color:var(--muted);font-size:12.5px}
+  .notif-item{display:flex;gap:11px;padding:12px 15px;border-bottom:1px solid var(--line);cursor:default}
+  .notif-item:last-child{border-bottom:0}
+  .notif-item.go{cursor:pointer}
+  .notif-item.go:hover{background:#f5f8fd}
+  .notif-ic{width:32px;height:32px;border-radius:8px;flex:0 0 auto;display:grid;place-items:center;font-size:16px}
+  .notif-item.warn .notif-ic{background:#fdeceb}
+  .notif-item.info .notif-ic{background:#eafaf3}
+  .notif-tt{font-weight:700;font-size:12.5px;color:var(--ink)}
+  .notif-bd{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.55}
+  /* 担当スタッフ選択メニュー */
+  .staff-menu{position:absolute;top:52px;right:12px;width:250px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 16px 50px rgba(0,0,0,.25);overflow:hidden;padding:6px}
+  .sm-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer}
+  .sm-item:hover{background:#f5f8fd}
+  .sm-item.active{background:#eef4fd}
+  .sm-av{width:28px;height:28px;border-radius:50%;background:#e9f1fc;color:var(--accent);display:grid;place-items:center;font-weight:700;font-size:12px;flex:0 0 auto}
+  .sm-name{font-weight:700;font-size:12.5px;color:var(--ink)}
+  .sm-role{font-size:11px;color:var(--muted)}
+  .sm-foot{border-top:1px solid var(--line);margin-top:4px;padding:9px 10px 5px}
+  .sm-add{font-size:11.5px;color:var(--accent);cursor:pointer;font-weight:700}
+  .sm-add:hover{text-decoration:underline}
+  .btn-append{background:#fff;color:var(--accent);border:1.5px solid #bcd3f5;border-radius:10px;font-family:inherit;font-weight:700;font-size:13px;padding:0 16px;cursor:pointer}
+  .btn-append:hover{background:#eef4fd}
+  .confirm-box{background:#fff;border-radius:14px;max-width:420px;width:100%;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:22px}
+  .confirm-msg{font-size:13.5px;line-height:1.7;color:var(--ink);white-space:pre-wrap;margin-bottom:18px}
+  .confirm-actions{display:flex;justify-content:flex-end;gap:10px}
+  .osec-div{font-size:11px;font-weight:700;color:var(--accent);text-align:center;margin:10px 0 6px;border-top:1px dashed #cfe0fb;padding-top:8px}
+  .osec-add{display:inline-block;font-size:10px;font-weight:700;color:var(--accent);background:#eef4fd;border:1px solid #cfe0fb;border-radius:5px;padding:1px 7px;margin:8px 0 3px}
+  .pl-empty{color:var(--muted);font-size:13px;text-align:center;padding:48px 16px;background:#fff;border:1px dashed var(--line);border-radius:12px}
+  .finish-bar{margin-top:12px;display:none}
+  .finish-bar.show{display:block}
+  .btn-finish{width:100%;background:#2f9e6f;color:#fff;border:0;border-radius:10px;font-family:inherit;font-weight:700;font-size:14px;padding:13px;cursor:pointer}
+  .btn-finish:hover{background:#268a60}
+  .pl-detail-wrap{overflow:auto;background:#fff;padding:20px;flex:1}
+  .pl-detail{font-size:13px;max-width:680px;margin:0 auto}
+  .spinner{width:16px;height:16px;border:2.5px solid #ffffff66;border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  /* ---------- result panel ---------- */
+  .result-empty{color:var(--muted);font-size:13px;text-align:center;padding:40px 10px}
+  .card{border:1px solid var(--line);border-radius:11px;margin-bottom:14px;overflow:hidden;opacity:0;transform:translateY(6px);transition:.4s}
+  .card.show{opacity:1;transform:none}
+  .card-h{display:flex;align-items:center;gap:8px;padding:10px 13px;font-weight:700;font-size:12.5px;border-bottom:1px solid var(--line)}
+  .card-h .tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;margin-left:auto}
+  .tag.save{background:#eafaf3;color:#1f8a5b}
+  .tag.karte{background:#fff4e6;color:#c07000}
+  .card.profile .card-h{background:#f3fbf7}
+  .card.want .card-h{background:#fff8ee}
+  .card-b{padding:12px 14px}
+  .kv{display:flex;gap:8px;padding:5px 0;font-size:12.5px;border-bottom:1px dashed #eef1f5}
+  .kv:last-child{border-bottom:0}
+  .kv .k{flex:0 0 92px;color:var(--muted);font-weight:500}
+  .kv .v{flex:1;color:var(--ink)}
+  ul.want-list{margin:0;padding-left:18px}
+  ul.want-list li{font-size:12.5px;margin:3px 0;display:list-item}
+  .want-t{outline:none}
+  .want-t:focus{background:#fffdf5;box-shadow:0 0 0 2px #ffe6b0;border-radius:3px}
+  .want-x{border:none;background:transparent;color:#c9a0a0;cursor:pointer;font-size:11px;margin-left:6px;opacity:0;transition:.15s}
+  ul.want-list li:hover .want-x{opacity:1}
+  .want-x:hover{color:#c0392b}
+  .want-add{margin-top:8px;border:1px dashed #e0c98a;background:#fffdf5;color:#a67c1a;border-radius:8px;padding:6px 12px;font-size:11.5px;font-weight:700;cursor:pointer}
+  .want-add:hover{background:#fff6e2}
+  /* SOAP */
+  .soap-card{border:1.5px solid #cdd8ec;border-radius:12px;overflow:hidden;opacity:0;transform:translateY(6px);transition:.4s}
+  .soap-card.show{opacity:1;transform:none}
+  .soap-card .card-h{background:#eef3fd}
+  .soap-row{display:flex;gap:0;border-bottom:1px solid var(--line)}
+  .soap-row:last-child{border-bottom:0}
+  .soap-key{flex:0 0 46px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:12px 0;color:#fff;font-weight:700;font-size:15px}
+  .soap-key small{font-weight:400;font-size:8.5px;opacity:.85;margin-top:2px;writing-mode:initial}
+  .k-S{background:var(--s)}.k-O{background:var(--o)}.k-A{background:var(--a)}.k-P{background:var(--p)}
+  .soap-val{flex:1;padding:11px 13px;font-size:12.5px;white-space:pre-wrap;color:var(--ink);min-height:44px}
+  .soap-val.pending{color:#aab2c0;font-style:italic}
+  .copy-bar{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;opacity:0;transform:translateY(6px);transition:.4s}
+  .copy-bar.show{opacity:1;transform:none}
+  .btn-copy{background:#fff;border:1.5px solid var(--teal);color:var(--teal);border-radius:8px;font-weight:700;font-size:13px;padding:11px 18px;cursor:pointer;display:inline-flex;gap:8px;align-items:center;font-family:inherit}
+  .btn-copy.primary{background:var(--teal);color:#fff}
+  .btn-copy:hover{filter:brightness(.96)}
+  .btn-copy svg{width:15px;height:15px}
+  .consent{display:flex;gap:8px;align-items:flex-start;font-size:11.5px;color:var(--muted);margin-top:14px}
+  .consent input{margin-top:2px}
+  /* toast */
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1f2733;color:#fff;padding:11px 20px;border-radius:10px;font-size:13px;font-weight:500;opacity:0;pointer-events:none;transition:.3s;z-index:100;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .reset{background:none;border:1px solid var(--line);color:var(--muted);border-radius:7px;font-size:11.5px;padding:5px 11px;cursor:pointer;font-family:inherit}
+  .legend{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.7}
+  .legend b{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<!-- ============ HEADER ============ -->
+<header class="topbar">
+  <div class="logo"><span class="ph-logo">AIアシスト</span></div>
+  <div class="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+    <input placeholder="患者番号、氏名">
+  </div>
+  <nav class="main">
+    <a onclick="showHome()" style="cursor:pointer">患者リスト</a>
+    <a class="active" id="navHome" onclick="showHome()" style="cursor:pointer">ホーム</a>
+  </nav>
+  <div class="right-tools">
+    <span class="pill" id="navAssist" onclick="showAssist(false)" style="cursor:pointer">🧠 AIアシスト</span>
+    <span class="ico bell" id="bellBtn" onclick="toggleNotif()" style="cursor:pointer;position:relative" title="通知">🔔<span class="notif-badge" id="notifBadge" style="display:none">0</span></span>
+    <span class="ico" onclick="openSettings()" style="cursor:pointer" title="設定">⚙</span>
+    <span class="doctor" id="staffBtn" onclick="toggleStaffMenu()" style="cursor:pointer;position:relative"><span class="av" id="staffAv">宇</span><span id="staffLabel">宇田川 はじめ 医師</span> ▾</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- ============ ホーム（患者リスト） ============ -->
+  <div id="homeView">
+    <div class="home-head">
+      <div>
+        <h1 style="margin:0;font-size:18px">患者リスト</h1>
+        <p class="home-sub">一通り完了した患者の記録が、ここに保存されます。</p>
+      </div>
+      <button class="btn-new" onclick="showAssist(true)">＋ 新規作成（AIアシスト）</button>
+    </div>
+    <div class="pl-list" id="patientList"></div>
+  </div>
+
+  <!-- ============ AIアシスト ============ -->
+  <div id="assistView" style="display:none">
+  <div class="titlebar">
+    <h1>AIアシスト</h1>
+    <span class="sub">留意事項、仕様についてはこちら</span>
+    <span class="proto-badge">PROTOTYPE ／ サンプルデータで動作します</span>
+  </div>
+
+  <div class="hintbar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+    <div>最初に<b>患者名とプロンプト（出力形式）</b>を選びます。<b>SOAP</b>を選ぶと「② カウンセリング録音 → ③ 診察録音」の流れに、<b>治療相談・説明サマリーなど</b>を選ぶと「② 診察・相談を直接録音」の流れに切り替わります。各「録音」ボタンを押すとサンプル会話が文字起こしされ、AI処理を体験できます。
+      <button class="reset" onclick="resetAll()" style="margin-top:6px">最初からやり直す</button>
+    </div>
+  </div>
+
+  <div class="cols">
+    <!-- ================= LEFT: 入力・録音 ================= -->
+    <div class="panel">
+      <div class="panel-h"><span class="n">入</span>入力 ／ 音声記録</div>
+      <div class="panel-b">
+
+        <!-- STEP 1 患者情報 ＋ プロンプト選択 -->
+        <div class="step active" id="step1">
+          <div class="step-h"><span class="badge">1</span><span class="t">患者情報とプロンプトの選択<small>お名前を入力し、作成したい記録の種類を選びます</small></span><span class="chk">✓ 設定済み</span></div>
+          <div class="step-b">
+            <div class="row2">
+              <div>
+                <label class="fld">患者番号</label>
+                <input class="tx" id="pno" placeholder="例）000123">
+              </div>
+              <div>
+                <label class="fld">患者氏名 <span style="color:var(--rec-red)">*</span></label>
+                <input class="tx" id="pname" placeholder="例）山田 太郎" oninput="updateFlow()">
+              </div>
+            </div>
+            <label class="fld" style="margin-top:13px">プロンプト（AIへの命令文 ／ 出力形式） <span style="color:var(--rec-red)">*</span></label>
+            <div class="prompt-sel-row">
+              <select class="prompt-sel" id="promptSel" onchange="onPrompt()">
+                <option value="">プロンプトを選択する</option>
+                <option value="soap">SOAP形式へ変換（カウンセリング → 診察の流れ）</option>
+                <option value="ortho">治療相談・説明サマリー（診察・相談を直接録音）</option>
+                <option value="refer">診療情報提供書案の作成（診察・相談を直接録音）</option>
+                <option value="bullet">要点の箇条書き（診察・相談を直接録音）</option>
+              </select>
+              <button class="gear" title="プロンプト管理（保留）">⚙</button>
+            </div>
+            <textarea class="tx prompt-text" id="promptText" placeholder="プロンプトを選ぶと命令文が表示されます。内容を編集してカスタマイズすることも可能です。"></textarea>
+            <div class="prompt-tip" id="flowTip">※ お名前とプロンプトを選択すると、次のステップに進めます。</div>
+          </div>
+        </div>
+
+        <!-- STEP C カウンセリング録音（SOAP選択時のみ表示） -->
+        <div class="step locked" id="stepC" style="display:none">
+          <div class="step-h"><span class="badge" id="badgeC">2</span><span class="t">カウンセリングを録音<small>受付登録の後／先生の診察前に実施</small></span><span class="chk">✓ 完了</span></div>
+          <div class="step-b">
+            <div class="rec-zone">
+              <button class="btn btn-rec" id="rec2btn" onclick="toggleRec(2)" disabled>
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                録音開始
+              </button>
+              <span class="timer" id="timer2"><span class="live-dot"></span><span class="tval">00:00</span></span>
+            </div>
+            <div class="mini-note">録音された音声は文字起こしされ、AIが「雑談（プロフィール）／要望（カルテ）／その他（S）」に自動で振り分けます。</div>
+            <div class="transcript-wrap" id="tw2">
+              <label class="fld" style="margin-top:12px">文字起こし（編集可）</label>
+              <textarea class="tx" id="trans2"></textarea>
+              <div class="rec-zone" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-run" id="ai2btn" onclick="runCounseling()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+                  AIで要約・振り分け
+                </button>
+                <button class="btn-ghost" onclick="copyTranscript(2)" title="文字起こしをコピー">📋 コピー</button>
+                <button class="btn-ghost" onclick="downloadTranscript(2)" title="文字起こしをテキスト保存">⬇ テキスト保存</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP E 診察・相談録音 → 記録作成 -->
+        <div class="step locked" id="stepE">
+          <div class="step-h"><span class="badge" id="badgeE">2</span><span class="t" id="stepEtitle">診察・相談を録音 → 記録作成 <small id="stepEsub">プロンプトを選択してください</small></span><span class="chk">✓ 完了</span></div>
+          <div class="step-b">
+            <div class="rec-zone">
+              <button class="btn btn-rec" id="rec3btn" onclick="toggleRec(3)" disabled>
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                録音開始
+              </button>
+              <span class="timer" id="timer3"><span class="live-dot"></span><span class="tval">00:00</span></span>
+            </div>
+            <div class="mini-note" id="rec3note">お名前とプロンプトを選択すると使えます。</div>
+            <div class="transcript-wrap" id="tw3">
+              <label class="fld" style="margin-top:12px">文字起こし（編集可）</label>
+              <textarea class="tx" id="trans3"></textarea>
+              <div class="rec-zone" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-run" id="ai3btn" onclick="runStep3()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+                  <span>この内容で実行（作り直し）</span>
+                </button>
+                <button class="btn btn-append" id="ai3add" onclick="appendStep3()" style="display:none">＋ 追加分を反映</button>
+                <button class="btn-ghost" onclick="copyTranscript(3)" title="文字起こしをコピー">📋 コピー</button>
+                <button class="btn-ghost" onclick="downloadTranscript(3)" title="文字起こしをテキスト保存">⬇ テキスト保存</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="legend" id="legendBox" style="display:none">
+          <b>振り分けルール（SOAP・カウンセリング）</b><br>
+          ・<b>雑談</b>（趣味・家族構成など）→ 患者プロフィールとして<b>別保存</b><br>
+          ・治療／診察／<b>満足度向上</b>に関わる要望 → <b>カルテ</b>へ反映<br>
+          ・その他の必要項目（主訴・既往・服薬・アレルギー等）→ <b>S</b> へ反映
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= RIGHT: 処理結果 ================= -->
+    <div class="panel">
+      <div class="panel-h"><span class="n" style="background:#2f9e6f">果</span>処理結果</div>
+      <div class="panel-b">
+        <div class="result-empty" id="emptyState">
+          まだ結果はありません。<br>左の手順に沿って録音・AI処理を実行してください。
+        </div>
+
+        <div id="resultArea" style="display:none">
+          <div class="edit-hint">✎ 自動反映された内容は、クリックして直接編集できます。</div>
+          <!-- 患者プロフィール（別保存） -->
+          <div class="card profile" id="cardProfile">
+            <div class="card-h">👤 患者プロフィール <span class="tag save">別保存</span></div>
+            <div class="card-b" id="profileBody"></div>
+          </div>
+
+          <!-- 医学的注意事項・既往（選択カード） -->
+          <div class="card med-card" id="cardMed">
+            <div class="card-h">⚠️ 医学的注意事項・既往 <span class="tag karte">カルテ反映</span></div>
+            <div class="card-b">
+              <select class="med-select" id="medSelect" onchange="onMedSelect()"></select>
+              <div class="med-add-row">
+                <input class="tx med-free" id="medFree" placeholder="自由入力で追加（例：睡眠時無呼吸症候群）" onkeydown="if(event.key==='Enter')addMedFree()">
+                <button class="btn-ghost med-addbtn" onclick="addMedFree()">追加</button>
+              </div>
+              <div class="med-chips" id="medChips"><span class="med-empty" id="medEmpty">該当する項目はありません（上のメニューまたは自由入力から追加）</span></div>
+              <div class="mini-note" style="margin-top:8px">プルダウン・自由入力から追加、チップの✕で削除できます。<span class="med-auto">AI検出</span> は会話から自動で追加された項目です。</div>
+            </div>
+          </div>
+
+          <!-- 要望・満足度メモ（カルテ反映） -->
+          <div class="card want" id="cardWant">
+            <div class="card-h">⭐ 要望・満足度メモ <span class="tag karte">カルテ反映</span></div>
+            <div class="card-b"><ul class="want-list" id="wantBody"></ul>
+              <button class="want-add" onclick="addWant()">＋ 項目を追加</button>
+            </div>
+          </div>
+
+          <!-- SOAP -->
+          <div class="soap-card" id="soapCard">
+            <div class="card-h">📋 SOAP（記録フォーマット）
+              <span class="tag" style="background:#eef0f4;color:#56607a" id="soapPatient">— </span>
+            </div>
+            <div>
+              <div class="soap-row"><div class="soap-key k-S">S<small>主観</small></div><div class="soap-val pending edit" contenteditable="true" id="valS">カウンセリングのAI処理で反映されます</div></div>
+              <div class="soap-row"><div class="soap-key k-O">O<small>客観</small></div><div class="soap-val pending edit" contenteditable="true" id="valO">診察のAI処理で反映されます</div></div>
+              <div class="soap-row"><div class="soap-key k-A">A<small>評価</small></div><div class="soap-val pending edit" contenteditable="true" id="valA">診察のAI処理で反映されます</div></div>
+              <div class="soap-row"><div class="soap-key k-P">P<small>計画</small></div><div class="soap-val pending edit" contenteditable="true" id="valP">診察のAI処理で反映されます</div></div>
+            </div>
+          </div>
+
+          <!-- SOAP以外のプロンプト出力 -->
+          <div class="soap-card" id="outCard" style="display:none">
+            <div class="card-h" id="outTitle">📋 出力
+              <span class="tag" style="background:#eef0f4;color:#56607a" id="outPatient">— </span>
+            </div>
+            <div class="card-b" id="outBody" style="white-space:pre-wrap;font-size:12.5px;padding:14px;line-height:1.7"></div>
+          </div>
+
+          <div class="copy-bar" id="copyBar">
+            <button class="btn-copy primary" onclick="copyPrimary()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+              この記録をコピー
+            </button>
+            <button class="btn-copy" id="copyAllBtn" onclick="openA4Preview()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              A4画像で保存（プレビュー）
+            </button>
+          </div>
+
+          <div class="finish-bar" id="finishBar">
+            <button class="btn-finish" onclick="savePatient()">✓ 診療を完了して患者リストに保存</button>
+          </div>
+
+          <label class="consent">
+            <input type="checkbox" id="consent" checked>
+            AIの出力結果は医師が内容を確認し、かつ、その結果の使用において医師が責任を負うことに同意します。
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div><!-- /assistView -->
+</div>
+
+<div id="a4sheet"></div>
+
+<!-- ============ A4プレビュー ============ -->
+<div class="settings-overlay" id="a4Overlay">
+  <div class="a4-modal">
+    <div class="settings-head"><span>🖼 プレビュー（A4・サブカルテ）</span><button class="settings-close" onclick="closeA4Preview()">✕ 閉じる</button></div>
+    <div class="a4-preview-wrap" id="a4PreviewWrap"><div id="a4Preview"></div></div>
+    <div class="settings-foot" style="gap:10px;justify-content:space-between">
+      <span class="sec-hint" style="margin:0">内容を確認のうえ保存してください。保存後、メディカルボックスノートに取り込みます。</span>
+      <div style="display:flex;gap:10px">
+        <button class="btn-copy" onclick="closeA4Preview()" style="border-color:var(--line);color:var(--muted)">キャンセル</button>
+        <button class="btn-copy primary" onclick="confirmA4Save()">この内容で保存（端末にDL）</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 患者詳細 ============ -->
+<div class="settings-overlay" id="patientOverlay">
+  <div class="a4-modal">
+    <div class="settings-head"><span id="patientTitle">患者記録</span><button class="settings-close" onclick="closePatient()">✕ 閉じる</button></div>
+    <div class="pl-detail-wrap"><div class="pl-detail" id="patientDetail"></div></div>
+    <div class="settings-foot" style="gap:10px;justify-content:space-between">
+      <button class="btn-copy" onclick="deletePatient()" style="border-color:#e6c0bb;color:#c0392b">この記録を削除</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn-copy" onclick="copyPatient()">テキストでコピー</button>
+        <button class="btn-copy primary" onclick="a4FromPatient()">A4画像で保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 通知 ============ -->
+<div class="notif-overlay" id="notifOverlay" onclick="if(event.target===this)closeNotif()">
+  <div class="notif-panel">
+    <div class="notif-head"><span>🔔 通知</span><button class="settings-close" onclick="closeNotif()">✕</button></div>
+    <div id="notifList"></div>
+  </div>
+</div>
+
+<!-- ============ 担当スタッフ選択 ============ -->
+<div class="notif-overlay" id="staffOverlay" onclick="if(event.target===this)closeStaffMenu()">
+  <div class="staff-menu" id="staffMenu"></div>
+</div>
+
+<!-- ============ 確認ダイアログ ============ -->
+<div class="settings-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <div class="confirm-msg" id="confirmMsg"></div>
+    <div class="confirm-actions">
+      <button class="btn-copy" onclick="closeConfirm(false)">キャンセル</button>
+      <button class="btn-copy primary" id="confirmOk" onclick="closeConfirm(true)">OK</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">コピーしました</div>
+
+<!-- ============ 設定画面 ============ -->
+<div class="settings-overlay" id="settingsOverlay">
+  <div class="settings-modal">
+    <div class="settings-head"><span>⚙ 設定</span><button class="settings-close" onclick="closeSettings()">✕ 閉じる</button></div>
+    <div class="settings-tabs">
+      <button class="settings-tab active" data-tab="basic" onclick="setTab('basic')">🏥 基本設定</button>
+      <button class="settings-tab" data-tab="staff" onclick="setTab('staff')">👥 スタッフ</button>
+      <button class="settings-tab" data-tab="med" onclick="setTab('med')">⚠️ 既往・リスク</button>
+      <button class="settings-tab" data-tab="personal" onclick="setTab('personal')">👤 パーソナル</button>
+      <button class="settings-tab" data-tab="prompt" onclick="setTab('prompt')">📝 プロンプト</button>
+      <button class="settings-tab" data-tab="data" onclick="setTab('data')">🔄 データ・同期</button>
+    </div>
+    <div class="settings-body">
+      <div class="settings-panel" id="panel-med">
+        <p class="sec-hint">問診カードのプルダウンに表示される、既往・リスク項目を編集できます。変更はすぐにカードへ反映されます。</p>
+        <div id="settingsMed"></div>
+        <button class="set-addgroup" onclick="settingsAddGroup()">＋ グループを追加</button>
+      </div>
+
+      <div class="settings-panel" id="panel-personal">
+        <p class="sec-hint">AIが会話から抽出する「患者プロフィール」の項目を編集できます。</p>
+        <div id="settingsPersonal"></div>
+      </div>
+
+      <div class="settings-panel active" id="panel-basic">
+        <p class="sec-hint">クリニックの基本情報です。プロトタイプ用のため、入力内容はこのセッション内でのみ保持されます。</p>
+        <div class="set-flds">
+          <div><label class="fld">クリニック名</label><input class="tx" id="setClinic" placeholder="〇〇歯科クリニック"></div>
+          <div><label class="fld">担当医師名</label><input class="tx" id="setDoctor" placeholder="宇田川 はじめ"></div>
+        </div>
+        <div class="set-flds" style="margin-top:10px">
+          <div><label class="fld">電話番号</label><input class="tx" id="setTel" placeholder="06-0000-0000"></div>
+          <div><label class="fld">住所</label><input class="tx" id="setAddr" placeholder="大阪府..."></div>
+        </div>
+      </div>
+
+      <div class="settings-panel" id="panel-prompt">
+        <p class="sec-hint">出力形式ごとのAIへの指示文（プロンプト）を編集できます。録音時に各形式へ自動適用されます。</p>
+        <div id="settingsPrompt"></div>
+        <button class="set-addgroup" onclick="restorePrompts()" style="border-style:solid;background:#fff">↩ 既定のプロンプトに戻す</button>
+      </div>
+
+      <div class="settings-panel" id="panel-data">
+        <div id="settingsData"></div>
+      </div>
+
+      <div class="settings-panel" id="panel-staff">
+        <p class="sec-hint">クリニックのスタッフを登録できます。氏名・役職に加え、任意でログイン用PIN（数字）を設定できます（端末同期時の本人確認に利用予定）。</p>
+        <div id="settingsStaff"></div>
+        <div class="staff-add">
+          <input class="tx" id="staffNewName" placeholder="氏名（例：田中 さくら）">
+          <select class="tx" id="staffNewRole"></select>
+          <input class="tx" id="staffNewPin" placeholder="PIN（任意・数字）" inputmode="numeric" maxlength="6">
+          <button class="btn-ghost" onclick="addStaff()">＋ 登録</button>
+        </div>
+      </div>
+    </div>
+    <div class="settings-foot"><button class="btn-copy primary" onclick="closeSettings()">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+/* ==================================================================
+   本番API接続設定（GAS）
+   ------------------------------------------------------------------
+   ▼ 下の SHARED_TOKEN に、GASのスクリプトプロパティで設定した
+     「SHARED_TOKEN」と“まったく同じ値”を貼り付けてください。
+     貼り付けると本番モード（実際に録音・AI生成）になります。
+     未記入のあいだは、デモ（サンプル）モードで動きます。
+   ================================================================== */
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbxHcrU2gRV0aTY5C1tFRVL0NFDBG4g4egLhuwsbmVqUScsPckIwCA1sLVsPxX7LIyOc/exec';
+var SHARED_TOKEN = 'kdc-2026ai-assist.08051101';   // ← ここにトークンを貼る
+var RECORDER_URL = 'recorder.html';                 // 同じGitHub Pages上に置く想定
+
+var USE_REAL_API = (SHARED_TOKEN.indexOf('__PASTE') === -1) && !!SHARED_TOKEN;
+
+/* GASへPOST（text/plainでCORSプリフライト回避） */
+function gasPost(payload){
+  payload = payload || {}; payload.token = SHARED_TOKEN;
+  return fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(payload) })
+    .then(function(r){ return r.text(); })
+    .then(function(t){ var d; try{ d=JSON.parse(t); }catch(e){ throw new Error('応答の解析に失敗'); }
+      if(!d.ok) throw new Error(d.error||'APIエラー'); return d; });
+}
+function gasGenerate(mode, transcript, counseling){
+  return gasPost({ action:'generate', mode:mode, transcript:transcript, counseling:counseling||'' })
+         .then(function(d){ return d.record; });
+}
+
+/* 録音ページを開く（n=2:カウンセリング / n=3:診察・相談） */
+function openRealRecorder(n){
+  var phase = (n===2) ? 'counseling' : 'exam';
+  var patient = ($('pname') ? ($('pname').value||'') : '');
+  var no = ($('pno') ? ($('pno').value||'') : '');
+  var u = RECORDER_URL
+    + '?api=' + encodeURIComponent(GAS_URL)
+    + '&token=' + encodeURIComponent(SHARED_TOKEN)
+    + '&phase=' + encodeURIComponent(phase)
+    + '&patient=' + encodeURIComponent(patient)
+    + '&no=' + encodeURIComponent(no);
+  var w = window.open(u, 'aiassist_recorder', 'width=680,height=760');
+  if(!w) toast('ポップアップがブロックされました。許可してください。');
+}
+
+/* 録音ページからの文字起こしを受け取る（複数回は自動追記） */
+window.addEventListener('message', function(ev){
+  var d = ev.data; if(!d || d.type!=='aiassist-transcript') return;
+  var n = (d.phase==='counseling') ? 2 : 3;
+  var el = $('trans'+n); if(!el) return;
+  var cur = (el.value||'').replace(/\s+$/,'');
+  el.value = cur ? (cur + '\n\n―― 追加録音 ――\n' + (d.text||'')) : (d.text||'');
+  var tw = $('tw'+n); if(tw) tw.classList.add('on');
+  toast('文字起こしを取り込みました');
+});
+
+/* API生成結果 → 画面用データ変数へ反映 */
+function applyGenResult(mode, rec){
+  if(!rec) return;
+  if(mode==='counseling'){
+    if(rec.S!=null) SOAP.S = rec.S;
+    if(Array.isArray(rec.profile)) PROFILE = rec.profile.map(function(p){ return [p.key||'', p.value||'']; });
+    if(Array.isArray(rec.wants))  WANTS = rec.wants.slice();
+  }else if(mode==='soap'){ // 診察（O/A/P）
+    if(rec.O!=null) SOAP.O = rec.O;
+    if(rec.A!=null) SOAP.A = rec.A;
+    if(rec.P!=null) SOAP.P = rec.P;
+  }else if(mode==='ortho'){
+    var order=['chief','explain','consent','qa','fee','next']; // ORTHO_SECTIONSの並び順に対応
+    order.forEach(function(key,i){ if(ORTHO_SECTIONS[i] && rec[key]!=null) ORTHO_SECTIONS[i].b = rec[key]; });
+  }else if(mode==='refer'){
+    if(rec.body!=null) REFER_OUT = rec.body;
+  }else if(mode==='bullet'){
+    if(Array.isArray(rec.points)) BULLET_OUT = rec.points.map(function(p){ return '・'+p; }).join('\n');
+  }
+}
+
+/* ============ サンプルデータ（歯科クリニック想定） ============ */
+const SAMPLE = {
+  counseling:
+`受付：こんにちは、本日はよろしくお願いします。今日はどうされましたか。
+患者：先週、右下の奥歯の詰め物が取れてしまって。冷たいものを飲むとしみる感じがあります。
+受付：ご不便でしたね。痛みはありますか。
+患者：じっとしている時は痛くないですが、噛むと少し響きます。
+受付：今日は車でいらしたんですか。
+患者：いえ、ゴルフの帰りに寄ったので電車です。最近ゴルフにハマっていて。週末は息子と娘も一緒に出かけることが多いんです。
+受付：お子さんお二人なんですね。
+患者：はい。あと前から気になっているんですが、前歯の色も少し白くできたらと。見た目も相談したいです。
+受付：承知しました。お薬は飲まれていますか。
+患者：血圧の薬を毎朝飲んでいます。あとペニシリンでじんましんが出たことがあります。
+受付：わかりました。では先生に診てもらいますね。`,
+  exam:
+`先生：お口を開けてください。右下6番、レジン充填の脱離を確認。実質欠損は中等度で象牙質に達しています。冷水痛はありますが自発痛はなし。歯髄反応は正常範囲です。隣の7番に初期の脱灰が見られますね。歯周ポケットは全体的に3ミリ、右下臼歯部の一部で4ミリ。レントゲンでは根尖部に異常なし。下顎前歯部に歯石の沈着がややあります。
+先生：診断は右下6番の二次う蝕、C2相当。歯周は軽度の歯肉炎ですね。本日は6番のカリエスを除去してコンポジットレジンで再充填します。次回はスケーリングで歯石除去とブラッシング指導を行います。前歯の審美希望については、後日ホワイトニングのカウンセリングを別途ご案内します。`,
+  ortho:
+`先生：本日は矯正相談ですね。今日はお仕事はお休みですか。
+患者：はい、営業の仕事で普段は人と話すことが多いんですが、今日は有給を取りました。休日はよくテニスをしています。
+先生：いいですね。では歯並びを拝見します。上の前歯に叢生、デコボコがあり、下の歯列も軽度の叢生です。前歯のかみ合わせはやや前突気味ですね。
+患者：はい、特に前歯のガタつきが気になっていて。実は来年の春に結婚式を控えていて、それまでに少しでも見た目を整えたくて。
+先生：おめでとうございます。治療法はワイヤー矯正とマウスピース矯正の2つがあります。今回のケースはマウスピースでも十分対応できます。マウスピースは目立ちにくく取り外しもできますが、1日20時間以上の装着が必要です。
+患者：仕事柄、目立たない方がありがたいので、マウスピースでお願いしたいです。ただ痛みがどのくらいか心配で。
+先生：交換のたびに数日違和感が出ますが強い痛みは少ないですよ。期間は1年半から2年、最初は月1回の通院です。抜歯は今回は不要そうです。
+先生：費用ですが、マウスピース矯正の総額は88万円（税込）、毎回の調整料が5,500円。精密検査・診断料が別途55,000円です。お支払いはデンタルローンの分割も可能です。
+患者：分割で考えたいです。一度持ち帰って婚約者と相談してもいいですか。
+先生：もちろんです。本日は同意までは求めませんので、ご検討ください。次回の精密検査だけ予約しておきましょうか。
+患者：はい、お願いします。`
+};
+
+/* ============ プロンプト（編集可・出力形式の命令文） ============ */
+const PROMPTS={
+  soap:`あなたは歯科医師です。録音内容を以下のSOAP方式のカルテ記載案にまとめてください。記載にない内容は決して書かないでください。
+S：患者が主観的に話した内容（主訴・既往・服薬・アレルギー等）
+O：検査結果や所見など客観的な観察
+A：評価・診断
+P：治療方針・今後の計画`,
+  ortho:`あなたは歯科の担当者です。治療相談・説明（矯正・インプラント・補綴など）の録音を、SOAPではなく以下の項目に整理してください。記載にない内容は書かないでください。
+1. 相談内容・主訴／ご希望
+2. 説明内容（治療の内容・手順）：提示した治療法・選択肢・期間・メリット/デメリット
+3. 患者への説明・同意（インフォームドコンセント）：説明済みのリスク・代替案、同意の有無、同意書の取得状況
+4. 患者の質問・懸念事項：不安・疑問とその回答
+5. 料金説明：概算費用、保険適用の有無（自費/保険）、支払い方法
+6. 決定事項・次回予定：決定した方針、次回来院の目的・予定`,
+  refer:`あなたは歯科医師です。記録内容から、他院あての診療情報提供書の案を作成してください。事実にない内容は記載しないでください。`,
+  bullet:`他の担当者が書いた記録等を、重要な点のみ簡潔な箇条書きに要約してください。`
+};
+const PROMPTS_DEFAULT=JSON.parse(JSON.stringify(PROMPTS));
+
+/* 治療相談・説明サマリーの出力（歯科最適化の項目構成） */
+let ORTHO_SECTIONS=[
+  {ic:'🗣️',c:'#5b6b8c',t:'相談内容・主訴／ご希望',
+   b:`・主訴：前歯のガタつき、笑った時の見た目を改善したい。\n・目立たない矯正を希望。痛みへの不安あり。`},
+  {ic:'📄',c:'#2f6fd6',t:'説明内容（治療の内容・手順）',
+   b:`・上顎前歯部の叢生、下顎の軽度叢生、前歯部やや前突と説明。\n・治療法はワイヤー矯正／マウスピース矯正の2案を提示。本症例はマウスピースで対応可能。\n・マウスピースは目立ちにくく着脱可。1日20時間以上の装着が必要。\n・治療期間 約1.5〜2年、当初は月1回通院。非抜歯の見込み。`},
+  {ic:'✅',c:'#2f9e6f',t:'患者への説明・同意（インフォームドコンセント）',
+   b:`・装着時間の遵守、交換時の違和感などのリスクを説明し患者は納得。\n・本日は治療同意は保留（同意書 未取得）。家族と相談のため持ち帰り希望。\n・次回精密検査についての同意のみ取得。`},
+  {ic:'❓',c:'#e08a1e',t:'患者の質問・懸念事項',
+   b:`・痛みの程度を心配 → 交換ごとに数日違和感は出るが強い痛みは少ないと回答。\n・見た目が目立たないかを重視 → マウスピースを選択。`},
+  {ic:'💴',c:'#1aa3a3',t:'料金説明',
+   b:`・マウスピース矯正 総額 88万円（税込）／自費診療（保険適用外）。\n・調整料 5,500円／回。精密検査・診断料 55,000円（別途）。\n・支払い：デンタルローンによる分割が可能。`},
+  {ic:'📅',c:'#7a5bd1',t:'決定事項・次回予定',
+   b:`・治療方針：マウスピース矯正の方向で検討（本人持ち帰り）。\n・次回：精密検査を予約（本人希望）。\n・検査・診断後に治療計画を確定し、改めて治療同意を取得。`}
+];
+function orthoHTML(){
+  return ORTHO_SECTIONS.map(s=>
+    `<div class="osec" style="border-left-color:${s.c}"><div class="osec-h"><span class="osec-ic">${s.ic}</span>${s.t}</div><div class="osec-b edit" contenteditable="true">${s.b.replace(/\n/g,'<br>')}</div></div>`
+  ).join('');
+}
+function orthoText(){
+  return ORTHO_SECTIONS.map(s=>`■${s.t}\n${s.b}`).join('\n\n');
+}
+
+let REFER_OUT=
+`〇〇歯科医院 御机下
+平素より大変お世話になっております。下記患者をご紹介申し上げます。
+
+【主訴】右下臼歯部の咬合時痛・冷水痛
+【現症】右下6番 二次う蝕（C2相当）、軽度歯肉炎。歯周ポケット最大4mm。
+【処置】本日 #6 カリエス除去＋CR再充填。
+【依頼事項】貴院での精査・加療をお願い申し上げます。
+
+※ 本文はAIによる下書き案です。送付前に必ず医師がご確認ください。`;
+
+let BULLET_OUT=
+`・右下6番 二次う蝕（C2）→ 本日CR再充填
+・冷水痛(+)／自発痛(-)、歯髄反応 正常範囲
+・歯周ポケット最大4mm、軽度歯肉炎
+・次回：スケーリング＋ブラッシング指導
+・前歯審美：後日ホワイトニング相談を案内`;
+
+/* ============ 医学的注意事項・既往（選択カード） ============ */
+const MED_GROUPS=[
+  ['基礎疾患（その他全身疾患・既往）',['脂質異常症','骨粗鬆症','関節リウマチ','貧血','緑内障','消化性潰瘍','精神疾患（うつ等）']],
+  ['感染症',['B型肝炎','C型肝炎','HIV','梅毒','結核']],
+  ['医管（歯科治療時医療管理料）対象',['高血圧症','虚血性心疾患','不整脈','心不全','脳血管障害','糖尿病','喘息','甲状腺機能障害','副腎皮質機能不全','てんかん','慢性腎不全(透析)','肝硬変','出血性疾患']],
+  ['アレルギー',['薬剤アレルギー','金属アレルギー','ラテックス','局所麻酔']],
+  ['注意点・服薬',['抗血栓薬服用','骨吸収抑制薬(BP製剤)','ステロイド','妊娠中','ペースメーカー']]
+];
+/* 会話文から自動検出するためのキーワード → チップ名 */
+const MED_KEYWORDS=[
+  ['高血圧','高血圧症'],['血圧の薬','高血圧症'],['糖尿','糖尿病'],['喘息','喘息'],['てんかん','てんかん'],
+  ['脳梗塞','脳血管障害'],['脳出血','脳血管障害'],['脳血管','脳血管障害'],
+  ['不整脈','不整脈'],['心不全','心不全'],['狭心症','虚血性心疾患'],['心筋梗塞','虚血性心疾患'],
+  ['甲状腺','甲状腺機能障害'],['透析','慢性腎不全(透析)'],['肝硬変','肝硬変'],
+  ['脂質異常','脂質異常症'],['コレステロール','脂質異常症'],['骨粗','骨粗鬆症'],['リウマチ','関節リウマチ'],
+  ['B型肝炎','B型肝炎'],['C型肝炎','C型肝炎'],['HIV','HIV'],['梅毒','梅毒'],['結核','結核'],
+  ['ペニシリン','薬剤アレルギー'],['アレルギー','薬剤アレルギー'],['じんましん','薬剤アレルギー'],['金属','金属アレルギー'],
+  ['ワーファリン','抗血栓薬服用'],['抗凝固','抗血栓薬服用'],['血液をサラサラ','抗血栓薬服用'],
+  ['ビスホスホネート','骨吸収抑制薬(BP製剤)'],['BP製剤','骨吸収抑制薬(BP製剤)'],
+  ['ステロイド','ステロイド'],['妊娠','妊娠中'],['ペースメーカー','ペースメーカー']
+];
+function renderMed(){
+  $('medSelect').innerHTML = `<option value="">＋ 既往・注意事項を追加…</option>`
+    + MED_GROUPS.map(g=>`<optgroup label="${g[0]}">`
+        + g[1].map(l=>`<option value="${l}">${l}</option>`).join('')
+        + `</optgroup>`).join('');
+}
+function onMedSelect(){
+  const v=$('medSelect').value;
+  if(v) addMed(v,false);
+  $('medSelect').value='';
+}
+function hasMed(label){
+  return Array.from($('medChips').querySelectorAll('.chip')).some(c=>c.dataset.label===label);
+}
+function addMed(label,auto){
+  if(hasMed(label)) return;
+  const chip=document.createElement('span');
+  chip.className='chip on';
+  chip.dataset.label=label;
+  chip.innerHTML=`${label}${auto?'<span class="med-auto">AI検出</span>':''}<span class="x">✕</span>`;
+  chip.addEventListener('click',()=>{ chip.remove(); refreshMedEmpty(); });
+  $('medChips').appendChild(chip);
+  refreshMedEmpty();
+}
+function refreshMedEmpty(){
+  const has=$('medChips').querySelectorAll('.chip').length>0;
+  $('medEmpty').style.display = has ? 'none' : '';
+}
+function autoFlagMed(text){
+  if(!text) return;
+  const hits=new Set();
+  MED_KEYWORDS.forEach(([kw,label])=>{ if(text.indexOf(kw)>=0) hits.add(label); });
+  hits.forEach(l=>addMed(l,true));
+}
+function selectedMeds(){
+  return Array.from($('medChips').querySelectorAll('.chip')).map(c=>c.dataset.label);
+}
+function clearMed(){
+  $('medChips').querySelectorAll('.chip').forEach(c=>c.remove());
+  refreshMedEmpty();
+}
+function addMedFree(){
+  const v=($('medFree').value||'').trim();
+  if(!v) return;
+  addMed(v,false);
+  $('medFree').value='';
+}
+
+/* ============ 設定画面 ============ */
+let PROFILE_FIELDS=['趣味','家族構成','職業','ライフイベント','来院手段','その他メモ'];
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function openSettings(){ renderSettingsMed(); renderSettingsPersonal(); renderSettingsStaff(); renderSettingsPrompt(); renderSettingsData(); setTab('basic'); $('settingsOverlay').classList.add('show'); }
+function closeSettings(){ $('settingsOverlay').classList.remove('show'); }
+function setTab(name){
+  document.querySelectorAll('.settings-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
+  document.querySelectorAll('.settings-panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+name));
+}
+/* 既往・リスク項目（グループ編集） */
+function renderSettingsMed(){
+  $('settingsMed').innerHTML = MED_GROUPS.map((g,gi)=>`
+    <div class="set-group">
+      <div class="set-grow">
+        <span class="set-move">
+          <button onclick="moveGroup(${gi},-1)" ${gi===0?'disabled':''} title="グループを上へ">▲</button>
+          <button onclick="moveGroup(${gi},1)" ${gi===MED_GROUPS.length-1?'disabled':''} title="グループを下へ">▼</button>
+        </span>
+        <input class="set-gname" value="${esc(g[0])}" onchange="settingsRenameGroup(${gi},this.value)">
+        <button class="set-delg" onclick="settingsDeleteGroup(${gi})">グループ削除</button>
+      </div>
+      <div class="set-list">${
+        g[1].length
+          ? g[1].map((it,ii)=>`<div class="set-row">
+              <span class="set-move">
+                <button onclick="moveItem(${gi},${ii},-1)" ${ii===0?'disabled':''} title="上へ">▲</button>
+                <button onclick="moveItem(${gi},${ii},1)" ${ii===g[1].length-1?'disabled':''} title="下へ">▼</button>
+              </span>
+              <span class="set-row-label">${esc(it)}</span>
+              <button class="set-row-x" onclick="settingsRemoveItem(${gi},${ii})" title="削除">✕</button>
+            </div>`).join('')
+          : '<div class="med-empty">項目なし</div>'
+      }</div>
+      <div class="set-addrow">
+        <input class="tx set-add" id="setAdd${gi}" placeholder="項目を追加（例：睡眠時無呼吸症候群）" onkeydown="if(event.key==='Enter')settingsAddItem(${gi})">
+        <button class="btn-ghost" onclick="settingsAddItem(${gi})">追加</button>
+      </div>
+    </div>`).join('');
+}
+function moveGroup(gi,dir){
+  const j=gi+dir; if(j<0||j>=MED_GROUPS.length) return;
+  const t=MED_GROUPS[gi]; MED_GROUPS[gi]=MED_GROUPS[j]; MED_GROUPS[j]=t;
+  renderSettingsMed(); renderMed();
+}
+function moveItem(gi,ii,dir){
+  const arr=MED_GROUPS[gi][1]; const j=ii+dir; if(j<0||j>=arr.length) return;
+  const t=arr[ii]; arr[ii]=arr[j]; arr[j]=t;
+  renderSettingsMed(); renderMed();
+}
+function settingsAddItem(gi){
+  const inp=$('setAdd'+gi); const v=(inp.value||'').trim();
+  if(!v) return;
+  if(!MED_GROUPS[gi][1].includes(v)) MED_GROUPS[gi][1].push(v);
+  renderSettingsMed(); renderMed();
+  toast('項目を追加しました');
+}
+function settingsRemoveItem(gi,ii){
+  MED_GROUPS[gi][1].splice(ii,1);
+  renderSettingsMed(); renderMed();
+}
+function settingsRenameGroup(gi,val){
+  const v=(val||'').trim(); if(v) MED_GROUPS[gi][0]=v;
+  renderMed();
+}
+function settingsAddGroup(){
+  MED_GROUPS.push(['新しいグループ',[]]);
+  renderSettingsMed();
+}
+function settingsDeleteGroup(gi){
+  MED_GROUPS.splice(gi,1);
+  renderSettingsMed(); renderMed();
+}
+/* パーソナル（プロフィール抽出項目） */
+function renderSettingsPersonal(){
+  $('settingsPersonal').innerHTML =
+    `<div class="set-list">`+
+    (PROFILE_FIELDS.length
+      ? PROFILE_FIELDS.map((f,i)=>`<div class="set-row">
+          <span class="set-move">
+            <button onclick="moveField(${i},-1)" ${i===0?'disabled':''} title="上へ">▲</button>
+            <button onclick="moveField(${i},1)" ${i===PROFILE_FIELDS.length-1?'disabled':''} title="下へ">▼</button>
+          </span>
+          <span class="set-row-label">${esc(f)}</span>
+          <button class="set-row-x" onclick="settingsRemoveField(${i})" title="削除">✕</button>
+        </div>`).join('')
+      : '<div class="med-empty">項目なし</div>')
+    +`</div>`+
+    `<div class="set-addrow"><input class="tx set-add" id="setAddField" placeholder="抽出項目を追加（例：通院のきっかけ）" onkeydown="if(event.key==='Enter')settingsAddField()"><button class="btn-ghost" onclick="settingsAddField()">追加</button></div>`;
+}
+function moveField(i,dir){
+  const j=i+dir; if(j<0||j>=PROFILE_FIELDS.length) return;
+  const t=PROFILE_FIELDS[i]; PROFILE_FIELDS[i]=PROFILE_FIELDS[j]; PROFILE_FIELDS[j]=t;
+  renderSettingsPersonal();
+}
+function settingsAddField(){
+  const v=($('setAddField').value||'').trim(); if(!v) return;
+  if(!PROFILE_FIELDS.includes(v)) PROFILE_FIELDS.push(v);
+  renderSettingsPersonal(); toast('項目を追加しました');
+}
+function settingsRemoveField(i){
+  PROFILE_FIELDS.splice(i,1);
+  renderSettingsPersonal();
+}
+
+/* スタッフ登録 */
+const ROLE_OPTS=['医師','歯科衛生士','歯科助手','受付','その他'];
+let STAFF=[{name:'宇田川 はじめ',role:'医師',pin:''}];
+function renderSettingsStaff(){
+  // 追加フォームの役職プルダウン
+  if($('staffNewRole')) $('staffNewRole').innerHTML=ROLE_OPTS.map(r=>`<option>${r}</option>`).join('');
+  $('settingsStaff').innerHTML = STAFF.length ? STAFF.map((s,i)=>`
+    <div class="set-group">
+      <div class="set-grow">
+        <span class="set-move">
+          <button onclick="moveStaff(${i},-1)" ${i===0?'disabled':''} title="上へ">▲</button>
+          <button onclick="moveStaff(${i},1)" ${i===STAFF.length-1?'disabled':''} title="下へ">▼</button>
+        </span>
+        <input class="set-gname" value="${esc(s.name)}" onchange="updateStaff(${i},'name',this.value)" placeholder="氏名">
+        <button class="set-delg" onclick="removeStaff(${i})">削除</button>
+      </div>
+      <div class="staff-fields">
+        <select class="tx staff-role" onchange="updateStaff(${i},'role',this.value)">${ROLE_OPTS.map(r=>`<option ${r===s.role?'selected':''}>${r}</option>`).join('')}</select>
+        <input class="tx staff-pin" value="${esc(s.pin||'')}" onchange="updateStaff(${i},'pin',this.value)" placeholder="PIN（任意・数字）" inputmode="numeric" maxlength="6">
+      </div>
+    </div>`).join('') : '<div class="med-empty" style="margin-bottom:10px">登録されたスタッフはいません。下のフォームから登録してください。</div>';
+  if(typeof refreshStaffHeader==='function') refreshStaffHeader();
+}
+function addStaff(){
+  const n=($('staffNewName').value||'').trim();
+  if(!n){ toast('氏名を入力してください'); return; }
+  STAFF.push({name:n, role:$('staffNewRole').value, pin:($('staffNewPin').value||'').trim()});
+  $('staffNewName').value=''; $('staffNewPin').value='';
+  renderSettingsStaff();
+  toast('スタッフを登録しました');
+}
+function removeStaff(i){ STAFF.splice(i,1); renderSettingsStaff(); }
+function updateStaff(i,k,v){ STAFF[i][k]=(k==='name')?(v||'').trim():v; refreshStaffHeader(); }
+function moveStaff(i,dir){
+  const j=i+dir; if(j<0||j>=STAFF.length) return;
+  const t=STAFF[i]; STAFF[i]=STAFF[j]; STAFF[j]=t;
+  renderSettingsStaff();
+}
+
+/* 担当スタッフ選択（ヘッダー右上） */
+let currentStaffIdx=0;
+function staffDisplay(s){ return s ? (s.name + (s.role?' '+s.role:'')) : ''; }
+function refreshStaffHeader(){
+  if(currentStaffIdx>=STAFF.length) currentStaffIdx=0;
+  const s=STAFF[currentStaffIdx];
+  $('staffLabel').textContent = s ? staffDisplay(s) : 'スタッフ未登録';
+  $('staffAv').textContent = s ? (s.name||'？').slice(0,1) : '？';
+}
+function renderStaffMenu(){
+  $('staffMenu').innerHTML =
+    (STAFF.length
+      ? STAFF.map((s,i)=>`<div class="sm-item ${i===currentStaffIdx?'active':''}" onclick="selectStaff(${i})"><span class="sm-av">${esc((s.name||'？').slice(0,1))}</span><div><div class="sm-name">${esc(s.name||'（無名）')}</div><div class="sm-role">${esc(s.role||'')}</div></div></div>`).join('')
+      : '<div class="sm-role" style="padding:10px">スタッフが登録されていません</div>')
+    + `<div class="sm-foot"><span class="sm-add" onclick="closeStaffMenu();openSettings();setTab('staff')">＋ スタッフを登録・編集（設定）</span></div>`;
+}
+function toggleStaffMenu(){
+  if($('staffOverlay').classList.contains('show')){ closeStaffMenu(); return; }
+  renderStaffMenu(); $('staffOverlay').classList.add('show');
+}
+function closeStaffMenu(){ $('staffOverlay').classList.remove('show'); }
+function selectStaff(i){ currentStaffIdx=i; refreshStaffHeader(); closeStaffMenu(); toast('担当：'+staffDisplay(STAFF[i])); }
+
+/* プロンプト編集 */
+const PROMPT_LABELS={soap:'SOAP記録',ortho:'治療相談・説明サマリー',refer:'診療情報提供書（案）',bullet:'要点の箇条書き'};
+function renderSettingsPrompt(){
+  $('settingsPrompt').innerHTML = Object.keys(PROMPT_LABELS).map(k=>`
+    <div class="set-group">
+      <div class="set-gname" style="border:0;padding:0 0 6px;font-weight:700">${esc(PROMPT_LABELS[k])}</div>
+      <textarea class="tx prompt-edit" onchange="PROMPTS['${k}']=this.value" oninput="PROMPTS['${k}']=this.value">${esc(PROMPTS[k])}</textarea>
+    </div>`).join('');
+}
+function restorePrompts(){
+  Object.keys(PROMPTS_DEFAULT).forEach(k=>PROMPTS[k]=PROMPTS_DEFAULT[k]);
+  renderSettingsPrompt();
+  toast('既定のプロンプトに戻しました');
+}
+
+/* データ・同期 */
+function renderSettingsData(){
+  const pct=storagePct();
+  const last=new Date(lastSyncMs).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+  $('settingsData').innerHTML=`
+    <div class="set-group">
+      <div class="data-h">🔄 同期設定（端末間でカルテを共有）</div>
+      <p class="sec-hint" style="margin:0 0 10px">複数のiPadで同じデータを共有します。基本は自動同期で、失敗したときだけ通知します。※プロトタイプでは擬似動作です。</p>
+      <div class="set-flds">
+        <div><label class="fld">エンドポイントURL</label><input class="tx" id="setEndpoint" placeholder="https://script.google.com/.../exec"></div>
+      </div>
+      <div class="set-flds" style="margin-top:10px">
+        <div><label class="fld">認証トークン</label><input class="tx" id="setToken" placeholder="クリニック共有トークン"></div>
+      </div>
+      <div class="set-flds" style="margin-top:10px">
+        <div><label class="fld">自動同期</label>
+          <select class="tx" onchange="autoSync=(this.value==='on');updateSyncStatusLine();updateNotifBadge()">
+            <option value="on" ${autoSync?'selected':''}>ON（自動で同期）</option>
+            <option value="off" ${!autoSync?'selected':''}>OFF（手動のみ）</option>
+          </select></div>
+        <div><label class="fld">自動同期の間隔（分）</label><input class="tx" type="number" min="1" value="${syncIntervalMin}" onchange="syncIntervalMin=Math.max(1,parseInt(this.value)||5)"></div>
+      </div>
+      <div class="data-row"><span id="syncStatusLine">${esc(syncStatusText())}</span>
+        <button class="btn-ghost" onclick="manualSync()">今すぐ同期</button></div>
+      <label class="sync-test"><input type="checkbox" ${syncFailSim?'checked':''} onchange="syncFailSim=this.checked;attemptSync(false);updateNotifBadge()"> 同期を失敗させる（テスト用）</label>
+    </div>
+
+    <div class="set-group">
+      <div class="data-h">🗄️ データ管理</div>
+      <div class="data-bar"><div class="data-bar-in" style="width:${pct}%;background:${pct>=capWarnPct?'#e07a3a':'#2f6fd6'}"></div></div>
+      <p class="sec-hint" style="margin:6px 0 12px">使用量：${storageUsed()} / ${STORAGE_CAP} 件（約${pct}%）　・　患者リスト：${patients.length}件</p>
+      <div class="set-flds">
+        <div><label class="fld">保存上限（件）</label><input class="tx" type="number" min="1" value="${STORAGE_CAP}" onchange="STORAGE_CAP=Math.max(1,parseInt(this.value)||120);renderSettingsData();updateNotifBadge()"></div>
+      </div>
+      <div class="data-row" style="margin-top:12px">
+        <span>全データ（患者・設定）をファイルに書き出し</span>
+        <button class="btn-ghost" onclick="exportBackup()">バックアップをDL</button>
+      </div>
+    </div>
+
+    <div class="set-group">
+      <div class="data-h">🔔 通知のしきい値</div>
+      <p class="sec-hint" style="margin:0 0 10px">同期は失敗時に自動で通知します。ここでは保存容量の警告ラインのみ設定します。</p>
+      <div class="set-flds">
+        <div><label class="fld">容量の警告（％以上）</label><input class="tx" type="number" min="1" max="100" value="${capWarnPct}" onchange="capWarnPct=Math.min(100,Math.max(1,parseInt(this.value)||80));renderSettingsData();updateNotifBadge()"></div>
+      </div>
+    </div>`;
+}
+function exportBackup(){
+  const data={ exportedAt:new Date().toISOString(), clinic:($('setClinic')&&$('setClinic').value)||'', patients, staff:STAFF, medGroups:MED_GROUPS, profileFields:PROFILE_FIELDS, prompts:PROMPTS };
+  try{
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`バックアップ_${dateStr()}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    toast('バックアップを書き出しました');
+  }catch(e){ toast('書き出しに失敗しました'); }
+}
+
+/* AI処理後の振り分け結果（プロトタイプ用に固定） */
+let PROFILE = [
+  ["趣味","ゴルフ（最近熱中）。本日もゴルフの帰りに来院"],
+  ["家族構成","お子さま2人（息子・娘）。週末は家族で外出することが多い"],
+  ["来院手段","電車"]
+];
+let WANTS = [
+  "前歯の<b>審美希望</b>：色を白くしたい意向あり（見た目を相談したい）",
+  "治療説明は<b>丁寧さ・満足度</b>を重視（要望を会計時の次回提案につなげる）"
+];
+/* 治療相談（直接録音）の雑談から抽出する患者プロフィール */
+let ORTHO_PROFILE = [
+  ["職業","営業職（人と話す機会が多い）"],
+  ["趣味","テニス（休日によくプレー）"],
+  ["ライフイベント","来年春に結婚式を予定。矯正を希望する主な動機"],
+  ["家族構成","婚約者と相談して治療を検討（来年結婚予定）"]
+];
+let SOAP = {
+  S:`・主訴：右下奥歯の詰め物が脱離。冷水痛あり、咬合時に違和感（響く）。
+・自発痛なし。
+・既往／服薬：高血圧（降圧薬を毎朝服用）。
+・アレルギー：ペニシリン（じんましん歴）。`,
+  O:`・右下6番 レジン充填脱離、二次う蝕（象牙質に達する中等度欠損）。
+・冷水痛(+)／自発痛(-)、歯髄反応 正常範囲。
+・右下7番 初期脱灰。
+・歯周ポケット 全顎3mm、右下臼歯部一部4mm。
+・下顎前歯部に歯石沈着。X-P：根尖部異常なし。`,
+  A:`・#6 二次う蝕 C2。
+・軽度歯肉炎。`,
+  P:`・本日：#6 カリエス除去＋CR再充填。
+・次回：スケーリング・ブラッシング指導。
+・前歯審美：後日ホワイトニングカウンセリングを案内。`
+};
+
+/* ============ 状態とユーティリティ ============ */
+const timers={2:null,3:null}, secs={2:0,3:0};
+let recState={2:false,3:false};
+let recTakes={2:0,3:0};
+let counselingDone=false, examDone=false, currentOut='soap', outText='', resultReady=false;
+let curProfile=null, curWants=null;
+let restoring=false, currentDraftId=null;
+let step3Baseline=null;
+let unsentCount=0, lastSyncMs=Date.now();      // 直近の同期成功時刻／未送信件数
+let autoSync=true, syncIntervalMin=5;          // 自動同期 ON/OFF と間隔（分）
+let syncFailSim=false, syncFailed=false;       // テスト用：失敗させるフラグ／現在の失敗状態
+function $(id){return document.getElementById(id)}
+function fmt(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1600)}
+function setState(id,locked,active){const e=$(id);e.classList.toggle('locked',!!locked);e.classList.toggle('active',!!active);}
+
+function onPrompt(){
+  const m=$('promptSel').value;
+  $('promptText').value = PROMPTS[m]||'';
+  const lbl={soap:'SOAP形式で実行', ortho:'治療相談・説明サマリーを作成', refer:'提供書案を作成', bullet:'要点を箇条書き'}[m];
+  $('ai3btn').querySelector('span').textContent = lbl||'この内容で実行';
+  updateFlow();
+}
+
+/* プロンプトに応じてフロー（ステップ構成）を切り替え */
+function updateFlow(){
+  const hasName=$('pname').value.trim().length>0;
+  const mode=$('promptSel').value;
+  const ready=hasName&&!!mode;
+
+  $('step1').classList.toggle('done',ready);
+  const plabel=hasName?($('pname').value.trim()+' 様'):'— ';
+  $('soapPatient').textContent=plabel; $('outPatient').textContent=plabel;
+
+  $('flowTip').textContent = !hasName ? '※ お名前を入力してください。'
+    : !mode ? '※ 作成したい記録（プロンプト）を選択してください。'
+    : (mode==='soap'
+        ? '※ SOAPは「② カウンセリング録音 → ③ 診察録音」の流れで作成します。'
+        : '※ この記録は「② 診察・相談を直接録音」して作成します。');
+
+  if(mode==='soap'){
+    // カウンセリング → 診察 の2段階
+    $('stepC').style.display=''; $('legendBox').style.display='';
+    $('badgeC').textContent='2'; $('badgeE').textContent='3';
+    $('stepEtitle').firstChild.textContent='診察を録音 → SOAP作成 ';
+    $('stepEsub').textContent='先生の所見・検査結果から O・A・P を抽出';
+    setState('stepC', !ready, ready && !counselingDone);
+    $('rec2btn').disabled = !ready;
+    setState('stepE', !counselingDone, counselingDone && !examDone);
+    $('rec3btn').disabled = !counselingDone;
+    $('rec3note').textContent = !counselingDone ? 'カウンセリングのAI処理が終わると使えます。' : '録音内容から SOAP の O・A・P を作成します。';
+  }else{
+    // 診察・相談に直行（カウンセリングなし）
+    $('stepC').style.display='none'; $('legendBox').style.display='none';
+    $('badgeE').textContent='2';
+    const T={
+      ortho:['診察・相談を録音 → サマリー作成 ','説明内容・同意・料金・次回予定などを整理'],
+      refer:['記録を録音 → 提供書案を作成 ','他院あての診療情報提供書の案を生成'],
+      bullet:['記録を録音 → 要点を箇条書き ','記録の重要点を簡潔に要約']
+    }[mode] || ['診察・相談を録音 → 記録作成 ','プロンプトを選択してください'];
+    $('stepEtitle').firstChild.textContent=T[0];
+    $('stepEsub').textContent=T[1];
+    setState('stepE', !ready, ready && !examDone);
+    $('rec3btn').disabled = !ready;
+    $('rec3note').textContent = !ready ? 'お名前とプロンプトを選択すると使えます。' : '録音内容を、選択した形式でAIが記録にします。';
+    // カウンセリング由来の表示は隠す（結果未生成のときのみクリア）
+    if(!resultReady){$('cardProfile').classList.remove('show');$('cardWant').classList.remove('show');$('cardMed').classList.remove('show');}
+  }
+}
+
+function transcriptLabel(n){ return n===2?'カウンセリング':'診察・相談'; }
+function copyTranscript(n){
+  const txt=($('trans'+n).value||'').trim();
+  if(!txt){ toast('文字起こしがありません'); return; }
+  const done=()=>toast(transcriptLabel(n)+'の文字起こしをコピーしました');
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(()=>fallbackCopyText(txt,done)); }
+  else fallbackCopyText(txt,done);
+}
+function fallbackCopyText(txt,cb){
+  const ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); }catch(e){}
+  ta.remove(); if(cb) cb();
+}
+function downloadTranscript(n){
+  const txt=($('trans'+n).value||'').trim();
+  if(!txt){ toast('文字起こしがありません'); return; }
+  const name=($('pname').value||'患者').trim()||'患者';
+  const no=($('pno').value||'').trim();
+  const header=`患者：${name}${no?'（'+no+'）':''}\n種別：${transcriptLabel(n)}の文字起こし\n作成日：${dateStr()}\n`+'─'.repeat(24)+'\n\n';
+  try{
+    const blob=new Blob([header+txt],{type:'text/plain;charset=utf-8'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`文字起こし_${name}_${transcriptLabel(n)}_${dateStr()}.txt`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    toast('文字起こしをテキスト保存しました');
+  }catch(e){ toast('保存に失敗しました'); }
+}
+function toggleRec(n){
+  if(USE_REAL_API){ openRealRecorder(n); return; }
+  const btn=$('rec'+n+'btn'), tm=$('timer'+n);
+  if(!recState[n]){
+    recState[n]=true; btn.classList.add('recording');
+    btn.innerHTML='<span class="dot"></span> 録音停止';
+    tm.classList.add('on'); secs[n]=0; tm.querySelector('.tval').textContent='00:00';
+    timers[n]=setInterval(()=>{secs[n]++;tm.querySelector('.tval').textContent=fmt(secs[n])},1000);
+  }else{
+    recState[n]=false; clearInterval(timers[n]);
+    btn.classList.remove('recording');
+    btn.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2"/></svg> 再録音';
+    tm.classList.remove('on');
+    // 文字起こし表示（Step3はプロンプトに応じてサンプルを切替）。複数回録音は自動で追記。
+    let txt;
+    if(n===2) txt=SAMPLE.counseling;
+    else txt=($('promptSel').value==='ortho')?SAMPLE.ortho:SAMPLE.exam;
+    recTakes[n]++;
+    const cur=$('trans'+n).value.replace(/\s+$/,'');
+    if(cur){
+      $('trans'+n).value = cur + `\n\n―― 追加録音 ${recTakes[n]}回目 ――\n` + txt;
+      toast('録音内容を追記しました（'+recTakes[n]+'回目）');
+    }else{
+      $('trans'+n).value = txt;
+    }
+    $('tw'+n).classList.add('on');
+  }
+}
+
+/* カウンセリングAI処理 */
+function applyCounseling(){
+  $('emptyState').style.display='none';
+  $('resultArea').style.display='block';
+  curProfile=PROFILE; curWants=WANTS;
+  $('profileBody').innerHTML=PROFILE.map(p=>`<div class="kv"><span class="k">${p[0]}</span><span class="v edit" contenteditable="true">${p[1]}</span></div>`).join('');
+  renderWants(WANTS);
+  if(!restoring) autoFlagMed($('trans2').value||SAMPLE.counseling);
+  $('cardProfile').style.display='';$('cardProfile').classList.add('show');
+  $('cardMed').style.display='';$('cardMed').classList.add('show');
+  $('cardWant').style.display='';$('cardWant').classList.add('show');
+  const vs=$('valS'); vs.textContent=SOAP.S; vs.classList.remove('pending');
+  $('outCard').style.display='none';$('outCard').classList.remove('show');
+  $('soapCard').style.display='';$('soapCard').classList.add('show');
+  $('stepC').classList.add('done');$('stepC').classList.remove('active');
+  counselingDone=true; updateFlow();
+}
+function runCounseling(){
+  const btn=$('ai2btn'); const orig=btn.innerHTML;
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> 解析中…';
+  if(USE_REAL_API){
+    const t=($('trans2').value||'').trim();
+    if(!t){ btn.disabled=false; btn.innerHTML=orig; toast('先に録音（文字起こし）を行ってください'); return; }
+    gasGenerate('counseling', t).then(rec=>{
+      applyGenResult('counseling', rec);
+      btn.disabled=false; btn.innerHTML=orig;
+      applyCounseling();
+      toast('Sを反映しました（O・A・Pは診察録音で追記されます）');
+    }).catch(e=>{ btn.disabled=false; btn.innerHTML=orig; toast('生成エラー: '+e.message); });
+    return;
+  }
+  setTimeout(()=>{
+    btn.disabled=false; btn.innerHTML=orig;
+    applyCounseling();
+    toast('Sを反映しました（O・A・Pは診察録音で追記されます）');
+  },1100);
+}
+
+/* Step E（診察・相談）AI処理：選択したプロンプトの出力形式で生成 */
+function applyStep3(mode){
+  currentOut=mode;
+  $('emptyState').style.display='none'; $('resultArea').style.display='block';
+  $('outPatient').textContent=$('soapPatient').textContent;
+  if(mode==='soap'){
+    ['O','A','P'].forEach(k=>{const v=$('val'+k);v.textContent=SOAP[k];v.classList.remove('pending');});
+    $('outCard').style.display='none';$('outCard').classList.remove('show');
+    $('soapCard').style.display='';$('soapCard').classList.add('show');
+  }else{
+    const titles={ortho:'📋 治療相談・説明サマリー',refer:'📋 診療情報提供書（案）',bullet:'📋 要点の箇条書き'};
+    $('outTitle').firstChild.textContent=titles[mode]+' ';
+    if(mode==='ortho'){
+      outText=orthoText(); $('outBody').style.padding='12px'; $('outBody').innerHTML=orthoHTML();
+      $('outBody').removeAttribute('contenteditable'); $('outBody').classList.remove('edit');
+      curProfile=ORTHO_PROFILE; curWants=null;
+      $('profileBody').innerHTML=ORTHO_PROFILE.map(p=>`<div class="kv"><span class="k">${p[0]}</span><span class="v edit" contenteditable="true">${p[1]}</span></div>`).join('');
+      if(!restoring) autoFlagMed($('trans3').value||SAMPLE.ortho);
+      $('cardProfile').style.display='';$('cardMed').style.display='';
+      $('cardProfile').classList.add('show'); $('cardMed').classList.add('show');
+      $('cardWant').style.display='none';$('cardWant').classList.remove('show');
+    }else{
+      outText=(mode==='refer')?REFER_OUT:BULLET_OUT; $('outBody').style.padding='14px'; $('outBody').textContent=outText;
+      $('outBody').setAttribute('contenteditable','true'); $('outBody').classList.add('edit');
+      curProfile=null; curWants=null;
+      $('cardProfile').style.display='none';$('cardProfile').classList.remove('show');
+      $('cardMed').style.display='none';$('cardMed').classList.remove('show');
+      $('cardWant').style.display='none';$('cardWant').classList.remove('show');
+    }
+    $('soapCard').style.display='none';$('soapCard').classList.remove('show');
+    $('outCard').style.display='';$('outCard').classList.add('show');
+  }
+  $('copyAllBtn').style.display='';
+  resultReady=true; examDone=true;
+  $('stepE').classList.add('done');$('stepE').classList.remove('active');
+  $('copyBar').classList.add('show'); $('finishBar').classList.add('show');
+  $('ai3add').style.display='';            // 「＋ 追加分を反映」を表示
+  step3Baseline=step3OutSig();             // 生成直後の内容を基準として記録
+}
+/* Step Eの出力内容のシグネチャ（手編集検知用） */
+function step3OutSig(){
+  if(currentOut==='soap') return [txt('valO'),txt('valA'),txt('valP')].join('||');
+  if(currentOut==='ortho') return readOrtho().map(s=>s.b).join('||');
+  return txt('outBody');
+}
+function runStep3(){
+  const mode=$('promptSel').value;
+  if(!mode){toast('プロンプト（出力形式）を選択してください');return}
+  const go=()=>doRunStep3(mode);
+  // すでに出力があり、生成時から内容が変わっている＝手編集あり → 上書き確認
+  if(resultReady && step3Baseline!==null && step3OutSig()!==step3Baseline){
+    askConfirm('出力に手動修正があります。\nAIで作り直すと、その修正は上書きされます。作り直しますか？\n\n（修正を残したい場合はキャンセルし、「＋ 追加分を反映」をお使いください）', ok=>{ if(ok) go(); }, '作り直す');
+  } else { go(); }
+}
+function doRunStep3(mode){
+  const btn=$('ai3btn'); const orig=btn.innerHTML;
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> 処理中…';
+  if(USE_REAL_API){
+    const t=($('trans3').value||'').trim();
+    if(!t){ btn.disabled=false; btn.innerHTML=orig; toast('先に録音（文字起こし）を行ってください'); return; }
+    const apiMode=(mode==='soap')?'exam':mode;
+    const counseling=($('trans2')?$('trans2').value:'')||'';
+    gasGenerate(apiMode, t, counseling).then(rec=>{
+      applyGenResult(mode, rec);
+      btn.disabled=false; btn.innerHTML=orig;
+      applyStep3(mode);
+      toast(mode==='soap'?'全録音を統合してSOAPを作成しました':'全録音を統合して記録を作成しました');
+    }).catch(e=>{ btn.disabled=false; btn.innerHTML=orig; toast('生成エラー: '+e.message); });
+    return;
+  }
+  setTimeout(()=>{
+    btn.disabled=false; btn.innerHTML=orig;
+    applyStep3(mode);
+    toast(mode==='soap'?'全録音を統合してSOAPを作成しました':'全録音を統合して記録を作成しました');
+  },1100);
+}
+/* ＋ 追加分を反映：既存の出力（手編集含む）を残したまま末尾に追記 */
+function appendStep3(){
+  const mode=$('promptSel').value || currentOut;
+  if(!resultReady){ runStep3(); return; }
+  const btn=$('ai3add'); const orig=btn.innerHTML; btn.disabled=true; btn.innerHTML='追記中…';
+  if(USE_REAL_API){
+    const t=($('trans3').value||'').trim();
+    if(!t){ btn.disabled=false; btn.innerHTML=orig; toast('文字起こしがありません'); return; }
+    const apiMode=(mode==='soap')?'exam':mode;
+    const counseling=($('trans2')?$('trans2').value:'')||'';
+    gasGenerate(apiMode, t, counseling).then(rec=>{
+      applyGenResult(mode, rec);
+      btn.disabled=false; btn.innerHTML=orig;
+      renderAppendStep3(mode);
+    }).catch(e=>{ btn.disabled=false; btn.innerHTML=orig; toast('生成エラー: '+e.message); });
+    return;
+  }
+  setTimeout(()=>{ btn.disabled=false; btn.innerHTML=orig; renderAppendStep3(mode); },800);
+}
+function renderAppendStep3(mode){
+    if(mode==='soap'){
+      ['O','A','P'].forEach(k=>{ const v=$('val'+k); const ex=(v.textContent||'').trim();
+        v.classList.remove('pending');
+        v.textContent = ex ? (ex+'\n― 追加分 ―\n'+SOAP[k]) : SOAP[k]; });
+    }else if(mode==='ortho'){
+      const bodies=[...$('outBody').querySelectorAll('.osec-b')];
+      ORTHO_SECTIONS.forEach((s,i)=>{
+        if(bodies[i]){
+          const ex=bodies[i].innerHTML.replace(/(?:<br\s*\/?>|\s)+$/,'');
+          bodies[i].innerHTML = ex + '<div class="osec-add">＋ 追加分</div>' + esc(s.b).replace(/\n/g,'<br>');
+        }
+      });
+    }else{
+      const add=(mode==='refer')?REFER_OUT:BULLET_OUT;
+      $('outBody').textContent=((($('outBody').textContent||'').trim())+'\n\n―― 追加分 ――\n'+add);
+    }
+    resultReady=true;
+    // 追記後はベースラインを更新しない＝以後「実行（作り直し）」時に必ず確認が出る
+    toast('追加分を末尾に反映しました');
+}
+/* 簡易確認ダイアログ */
+let confirmCb=null;
+function askConfirm(msg, cb, okLabel){
+  $('confirmMsg').textContent=msg;
+  $('confirmOk').textContent=okLabel||'OK';
+  confirmCb=cb;
+  $('confirmOverlay').classList.add('show');
+}
+function closeConfirm(ok){
+  $('confirmOverlay').classList.remove('show');
+  const cb=confirmCb; confirmCb=null;
+  if(cb) cb(ok);
+}
+
+/* ============ コピー ============ */
+function patientHeaderRec(rec){return `【患者】${rec.name}${rec.no?'（'+rec.no+'）':''}`;}
+const OUT_TITLE={ortho:'■治療相談・説明サマリー',refer:'■診療情報提供書（案）',bullet:'■要点'};
+function buildPrimary(rec){
+  rec=rec||getCurrentRecord();
+  if(rec.mode==='soap'){
+    const s=rec.soap;
+    return `${patientHeaderRec(rec)}\n■S（主観）\n${s.S}\n■O（客観）\n${s.O}\n■A（評価）\n${s.A}\n■P（計画）\n${s.P}`;
+  }
+  let body;
+  if(rec.mode==='ortho') body=rec.ortho.map(s=>`■${s.t}\n${s.b}`).join('\n\n');
+  else body=rec.outText;
+  return `${patientHeaderRec(rec)}\n${OUT_TITLE[rec.mode]||'■記録'}\n${body}`;
+}
+function buildAll(rec){
+  rec=rec||getCurrentRecord();
+  let extra='';
+  if(rec.profile&&rec.profile.length) extra+=`\n\n──────────\n【患者プロフィール／別保存】\n`+rec.profile.map(p=>`・${p[0]}：${p[1]}`).join('\n');
+  if(rec.meds&&rec.meds.length) extra+=`\n\n【医学的注意事項・既往／カルテ反映】\n`+rec.meds.map(m=>'・'+m).join('\n');
+  if(rec.wants&&rec.wants.length) extra+=`\n\n【要望・満足度メモ／カルテ反映】\n`+rec.wants.map(w=>'・'+w.replace(/<[^>]+>/g,'')).join('\n');
+  return buildPrimary(rec)+extra;
+}
+function doCopy(text,msg){
+  navigator.clipboard&&navigator.clipboard.writeText(text).then(()=>toast(msg)).catch(()=>fallbackCopy(text,msg));
+  if(!navigator.clipboard)fallbackCopy(text,msg);
+}
+function fallbackCopy(text,msg){
+  const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+  document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy');toast(msg)}catch(e){toast('コピーできませんでした')}
+  document.body.removeChild(ta);
+}
+function copyPrimary(){
+  if(!resultReady){toast('先にAI処理を実行してください');return}
+  doCopy(buildPrimary(),'記録をコピーしました');
+}
+function copyAll(){
+  if(!resultReady){toast('先にAI処理を実行してください');return}
+  doCopy(buildAll(),'プロフィール含め全てコピーしました');
+}
+
+/* ============ A4画像で保存（サブカルテ用） ============ */
+function dateStr(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function brEsc(s){return esc(s).replace(/\n/g,'<br>');}
+function modeLabel(m){return {soap:'SOAP記録',ortho:'治療相談・説明サマリー',refer:'診療情報提供書（案）',bullet:'要点の箇条書き'}[m]||'記録';}
+/* ---- 右パネルの編集後の内容をDOMから読み取る ---- */
+function txt(id){const e=$(id);return ((e.innerText!==undefined?e.innerText:e.textContent)||'').replace(/\u00a0/g,' ').replace(/\n{3,}/g,'\n\n').trim();}
+function readSOAP(){return {S:txt('valS'),O:txt('valO'),A:txt('valA'),P:txt('valP')};}
+function readOrtho(){
+  const bodies=[...$('outBody').querySelectorAll('.osec-b')];
+  if(bodies.length!==ORTHO_SECTIONS.length) return ORTHO_SECTIONS.map(s=>({t:s.t,b:s.b}));
+  return ORTHO_SECTIONS.map((s,i)=>({t:s.t,b:(bodies[i].innerText||'').replace(/\u00a0/g,' ').trim()}));
+}
+function readProfile(){
+  if(!curProfile) return null;
+  const rows=[...$('profileBody').querySelectorAll('.kv')];
+  if(!rows.length) return curProfile.map(p=>[p[0],p[1]]);
+  return rows.map(r=>[(r.querySelector('.k')?.innerText||'').trim(),(r.querySelector('.v')?.innerText||'').trim()]);
+}
+function wantItemHTML(w){
+  return `<li><span class="want-t edit" contenteditable="true">${esc(w||'')}</span><button class="want-x" contenteditable="false" title="削除" onclick="delWant(this)">✕</button></li>`;
+}
+function renderWants(list){ $('wantBody').innerHTML=(list||[]).map(wantItemHTML).join(''); }
+function addWant(){
+  $('wantBody').insertAdjacentHTML('beforeend', wantItemHTML(''));
+  const items=$('wantBody').querySelectorAll('.want-t');
+  const el=items[items.length-1];
+  if(el && el.focus) el.focus();
+}
+function delWant(btn){ const li=btn.closest('li'); if(li) li.remove(); }
+function readWants(){
+  if(!curWants) return null;
+  const ts=[...$('wantBody').querySelectorAll('.want-t')];
+  if(!ts.length) return curWants.slice();
+  return ts.map(t=>(t.innerText||'').replace(/<[^>]+>/g,'').trim()).filter(x=>x);
+}
+function contentFields(){
+  return {
+    soap:(currentOut==='soap')?readSOAP():null,
+    ortho:(currentOut==='ortho')?readOrtho():null,
+    outText:(currentOut==='refer'||currentOut==='bullet')?txt('outBody'):'',
+    profile:readProfile(),
+    wants:readWants()
+  };
+}
+/* 保存済み（編集後）の内容を右パネルに書き戻す（下書き再開用） */
+function applyContent(rec){
+  if(rec.soap){
+    if(!$('valS').classList.contains('pending') && rec.soap.S!=null) $('valS').textContent=rec.soap.S;
+    if(rec.resultReady) ['O','A','P'].forEach(k=>{ if(rec.soap[k]!=null) $('val'+k).textContent=rec.soap[k]; });
+  }
+  if(rec.resultReady && rec.mode==='ortho' && rec.ortho){
+    const bodies=[...$('outBody').querySelectorAll('.osec-b')];
+    rec.ortho.forEach((s,i)=>{ if(bodies[i]) bodies[i].innerHTML=esc(s.b).replace(/\n/g,'<br>'); });
+  }
+  if(rec.resultReady && (rec.mode==='refer'||rec.mode==='bullet') && rec.outText){ $('outBody').textContent=rec.outText; }
+  if(rec.profile){
+    const vs=[...$('profileBody').querySelectorAll('.kv .v')];
+    rec.profile.forEach((p,i)=>{ if(vs[i]) vs[i].textContent=p[1]; });
+  }
+  if(rec.wants){
+    renderWants(rec.wants);
+  }
+}
+function getCurrentRecord(){
+  const c=contentFields();
+  return {
+    id:'p'+Date.now()+Math.floor(Math.random()*1000),
+    no:$('pno').value.trim(),
+    name:$('pname').value.trim()||'（未入力）',
+    date:new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}),
+    mode:currentOut,
+    soap:c.soap, ortho:c.ortho, outText:c.outText,
+    profile:c.profile,
+    meds:selectedMeds(),
+    wants:c.wants,
+    status:'done'
+  };
+}
+function recordBodyHTML(rec){
+  let mainHTML;
+  if(rec.mode==='soap'){
+    mainHTML=['S','O','A','P'].map(k=>`<div class="a4-soap"><div class="a4-soap-k">${k}</div><div class="a4-soap-v">${brEsc(rec.soap[k])}</div></div>`).join('');
+  }else if(rec.mode==='ortho'){
+    mainHTML=rec.ortho.map(s=>`<div class="a4-sec"><div class="a4-sec-t">${esc(s.t)}</div><div class="a4-sec-b">${brEsc(s.b)}</div></div>`).join('');
+  }else{
+    mainHTML=`<div class="a4-text">${brEsc(rec.outText)}</div>`;
+  }
+  let blocks='';
+  if(rec.profile&&rec.profile.length){
+    blocks+=`<div class="a4-block"><h3>患者プロフィール</h3>`+rec.profile.map(p=>`<div class="a4-kv"><b>${esc(p[0])}</b>：${esc(p[1])}</div>`).join('')+`</div>`;
+  }
+  if(rec.meds&&rec.meds.length){
+    blocks+=`<div class="a4-block warn"><h3>医学的注意事項・既往</h3><div class="a4-tags">`+rec.meds.map(m=>`<span>${esc(m)}</span>`).join('')+`</div></div>`;
+  }
+  if(rec.wants&&rec.wants.length){
+    blocks+=`<div class="a4-block"><h3>要望・満足度メモ</h3>`+rec.wants.map(w=>`<div class="a4-kv">・${esc(w.replace(/<[^>]+>/g,''))}</div>`).join('')+`</div>`;
+  }
+  return `<div class="a4-pt">患者：${esc(rec.name)}　${rec.no?'（患者番号：'+esc(rec.no)+'）　':''}／　作成日：${esc(rec.date)}</div>
+    <div class="a4-stitle">${esc(modeLabel(rec.mode))}</div>
+    ${mainHTML}
+    ${blocks}`;
+}
+function buildA4HTML(rec){
+  rec=rec||getCurrentRecord();
+  return `<div class="a4-page"><div class="a4-content">${recordBodyHTML(rec)}</div></div>`;
+}
+/* 内容量に応じて1ページ（A4）に収まるよう文字スケール --k を調整 */
+function fitA4Page(page){
+  if(!page) return;
+  page.style.setProperty('--k',1);
+  const content=page.querySelector('.a4-content');
+  if(!content) return;
+  const cs=getComputedStyle(page);
+  const availH=1123 - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  let k=1;
+  for(let i=0;i<16;i++){
+    const h=content.scrollHeight;
+    if(h<=availH) break;
+    k=Math.max(0.55, k*(availH/h)*0.985);
+    page.style.setProperty('--k',k);
+  }
+}
+async function saveA4(){ openA4Preview(); }
+let a4Rec=null;
+function openA4Preview(rec){
+  if(!rec && !resultReady){toast('先にAI処理を実行してください');return}
+  a4Rec = rec || getCurrentRecord();
+  $('a4Preview').innerHTML=buildA4HTML(a4Rec);
+  $('a4Overlay').classList.add('show');
+  setTimeout(()=>{ fitA4Page($('a4Preview').firstElementChild); fitA4Scale(); },30);
+}
+function fitA4Scale(){
+  const wrap=$('a4PreviewWrap'); const page=$('a4Preview').firstElementChild;
+  if(!page) return;
+  page.style.transform='none';
+  const avail=wrap.clientWidth - 32; // padding分
+  const scale=Math.min(1, avail/794);
+  page.style.transformOrigin='top left';
+  page.style.transform='scale('+scale+')';
+  $('a4Preview').style.height=(page.offsetHeight*scale)+'px';
+  $('a4Preview').style.width=(794*scale)+'px';
+  $('a4Preview').style.margin='0 auto';
+}
+function closeA4Preview(){ $('a4Overlay').classList.remove('show'); }
+async function confirmA4Save(){
+  const rec=a4Rec||getCurrentRecord();
+  const sheet=$('a4sheet');
+  sheet.innerHTML=buildA4HTML(rec);
+  fitA4Page(sheet.firstElementChild);
+  if(!window.html2canvas){ toast('画像化ライブラリ未読込のためテキストをコピーします'); doCopy(buildAll(rec),'コピーしました'); closeA4Preview(); return; }
+  toast('A4画像を生成中…');
+  try{
+    const canvas=await window.html2canvas(sheet.firstElementChild,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false});
+    const name=(rec.name||'患者').replace(/（未入力）/,'患者');
+    const a=document.createElement('a');
+    a.download=`サブカルテ_${name}_${dateStr()}.png`;
+    a.href=canvas.toDataURL('image/png');
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('A4画像を端末に保存しました');
+    closeA4Preview();
+  }catch(e){
+    toast('画像生成に失敗しました');
+  }
+}
+window.addEventListener('resize',()=>{ if($('a4Overlay').classList.contains('show')) fitA4Scale(); });
+
+/* ============ ホーム（患者リスト） ============ */
+let patients=[
+  { id:'demo1', no:'000098', name:'田中 一郎', date:'2026年6月8日', mode:'soap', status:'done',
+    soap:{S:'・主訴：左下の歯ぐきが腫れて痛む。\n・冷温痛なし。',O:'・左下7番 歯肉腫脹、軽度動揺。歯周ポケット5mm。\n・X-P：水平性骨吸収。',A:'・慢性歯周炎（中等度）。',P:'・本日SRP施行。次回再評価。'},
+    profile:[['趣味','釣り'],['家族構成','妻と二人暮らし']], meds:['糖尿病','抗血栓薬服用'], wants:null },
+  { id:'demo2', no:'000102', name:'鈴木 美咲', date:'2026年6月8日', mode:'ortho', status:'done',
+    ortho:[{t:'相談内容・主訴／ご希望',b:'・前歯の出っ歯が気になる。結婚式前に整えたい。'},{t:'説明内容（治療の内容・手順）',b:'・マウスピース矯正を提案。期間 約2年。'},{t:'料金説明',b:'・総額85万円（税込）／自費。分割可。'},{t:'決定事項・次回予定',b:'・次回 精密検査を予約。'}],
+    profile:[['趣味','ヨガ'],['ライフイベント','来年結婚を予定']], meds:[], wants:null },
+  { id:'demo3', no:'000110', name:'高橋 健', date:'2026年6月9日', dateKey:'2026-06-09', mode:'soap', status:'draft',
+    promptText:'', trans2:'（カウンセリング録音の文字起こし途中…）', trans3:'',
+    counselingDone:true, examDone:false, resultReady:false, meds:['高血圧症'] }
+];
+let detailId=null;
+
+function showHome(){
+  saveDraftIfNeeded();
+  $('homeView').style.display='';
+  $('assistView').style.display='none';
+  $('navHome').classList.add('active');
+  renderPatients();
+}
+function showAssist(isNew){
+  if(isNew) resetAll();
+  $('homeView').style.display='none';
+  $('assistView').style.display='';
+  $('navHome').classList.remove('active');
+}
+/* ---- 下書き（作成途中）の自動保存 ---- */
+function hasProgress(){
+  return !!($('pname').value.trim() || $('pno').value.trim() || $('promptSel').value ||
+            $('trans2').value || $('trans3').value || counselingDone || resultReady);
+}
+function snapshotDraft(){
+  const c=contentFields();
+  return {
+    id: currentDraftId || ('p'+Date.now()+Math.floor(Math.random()*1000)),
+    status:'draft',
+    no:$('pno').value.trim(),
+    name:$('pname').value.trim(),
+    date:new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}),
+    dateKey:dateStr(),
+    mode:$('promptSel').value||'',
+    promptText:$('promptText').value,
+    trans2:$('trans2').value, trans3:$('trans3').value,
+    counselingDone, examDone, resultReady,
+    meds:selectedMeds(),
+    soap:c.soap, ortho:c.ortho, outText:c.outText, profile:c.profile, wants:c.wants
+  };
+}
+let lastDraftSig='';
+function saveDraftIfNeeded(){
+  if($('assistView').style.display==='none') return false;   // 編集画面にいない
+  if(!hasProgress()) return false;                            // 入力なし
+  const d=snapshotDraft();
+  const sig=JSON.stringify(Object.assign({},d,{id:undefined,date:undefined}));
+  const idx=patients.findIndex(p=>p.id===d.id);
+  if(idx>=0){ if(sig===lastDraftSig) return false; patients[idx]=d; }
+  else patients.unshift(d);
+  currentDraftId=d.id; lastDraftSig=sig;
+  updateNotifBadge();
+  return true;
+}
+/* 一定時間ごとの自動保存（編集画面にいて、内容に変更があれば） */
+function autosaveTick(){
+  if(saveDraftIfNeeded()){ toast('下書きを自動保存しました'); }
+}
+setInterval(autosaveTick, 20000);
+setInterval(autoSyncTick, 30000); // 自動同期（プロトタイプでは体感用に30秒間隔／実機は設定の分間隔）
+function resumeDraft(rec){
+  resetAll();
+  currentDraftId=rec.id;
+  restoring=true;
+  $('pno').value=rec.no||''; $('pname').value=rec.name||'';
+  if(rec.mode){ $('promptSel').value=rec.mode; onPrompt(); if(rec.promptText) $('promptText').value=rec.promptText; }
+  updateFlow();
+  if(rec.trans2){ $('trans2').value=rec.trans2; $('tw2').classList.add('on'); }
+  if(rec.counselingDone) applyCounseling();
+  if(rec.trans3){ $('trans3').value=rec.trans3; $('tw3').classList.add('on'); }
+  if(rec.resultReady && rec.mode) applyStep3(rec.mode);
+  applyContent(rec);
+  clearMed(); (rec.meds||[]).forEach(m=>addMed(m,false));
+  restoring=false;
+  lastDraftSig='';
+  showAssist(false);
+  toast('下書きを再開しました');
+}
+function renderPatients(){
+  const box=$('patientList');
+  if(!patients.length){ box.innerHTML='<div class="pl-empty">保存された患者記録はありません。「＋ 新規作成」から記録を作成してください。</div>'; return; }
+  box.innerHTML=patients.map(p=>{
+    const draft=p.status==='draft';
+    const nm=p.name||'（無題）';
+    const sub=draft ? ('作成中'+(p.mode?'・'+modeLabel(p.mode):'')) : modeLabel(p.mode);
+    return `
+    <div class="pl-row${draft?' draft':''}" onclick="openPatient('${p.id}')">
+      <div class="pl-av${draft?' draft':''}">${esc(nm.slice(0,1))}</div>
+      <div class="pl-main">
+        <div class="pl-name">${esc(nm)}<span class="pl-no">${p.no?'No.'+esc(p.no):''}</span>
+          ${draft?'<span class="pl-badge draft">作成中（下書き）</span>':'<span class="pl-badge done">完了</span>'}
+        </div>
+        <div class="pl-meta">${esc(p.date)}　・　${esc(sub)}</div>
+        ${p.meds&&p.meds.length?`<div class="pl-tags">`+p.meds.slice(0,4).map(m=>`<span>${esc(m)}</span>`).join('')+(p.meds.length>4?`<span>+${p.meds.length-4}</span>`:'')+`</div>`:''}
+      </div>
+      <button class="pl-del" title="削除" onclick="event.stopPropagation();confirmDeletePatient('${p.id}')">🗑</button>
+      <div class="pl-arrow">›</div>
+    </div>`;}).join('');
+  updateNotifBadge();
+}
+function confirmDeletePatient(id){
+  const p=patients.find(x=>x.id===id); if(!p) return;
+  askConfirm(`「${p.name||'（無題）'}」の記録を削除しますか？\nこの操作は元に戻せません。`, ok=>{
+    if(!ok) return;
+    patients=patients.filter(x=>x.id!==id);
+    if(currentDraftId===id) currentDraftId=null;
+    renderPatients(); toast('記録を削除しました');
+  }, '削除する');
+}
+function savePatient(){
+  if(!resultReady){toast('先にAI処理を実行してください');return}
+  const rec=getCurrentRecord(); rec.status='done';
+  if(currentDraftId){ patients=patients.filter(p=>p.id!==currentDraftId); currentDraftId=null; }
+  patients.unshift(rec);
+  unsentCount++;
+  toast('患者リストに保存しました');
+  resetAll();
+  showHome();
+}
+function openPatient(id){
+  const rec=patients.find(p=>p.id===id); if(!rec) return;
+  if(rec.status==='draft'){ resumeDraft(rec); return; }   // 下書きは編集再開
+  detailId=id;
+  $('patientTitle').textContent=`${rec.name} さんの記録`;
+  $('patientDetail').innerHTML=recordBodyHTML(rec);
+  $('patientOverlay').classList.add('show');
+}
+function closePatient(){ $('patientOverlay').classList.remove('show'); detailId=null; }
+function copyPatient(){
+  const rec=patients.find(p=>p.id===detailId); if(!rec) return;
+  doCopy(buildAll(rec),'記録をコピーしました');
+}
+function a4FromPatient(){
+  const rec=patients.find(p=>p.id===detailId); if(!rec) return;
+  openA4Preview(rec);
+}
+function deletePatient(){
+  if(!detailId) return;
+  patients=patients.filter(p=>p.id!==detailId);
+  closePatient(); renderPatients(); toast('記録を削除しました');
+}
+
+/* ============ 通知（システム） ============ */
+let STORAGE_CAP=120; // 保存上限（件・プロトタイプ用の想定値）
+let capWarnPct=80;   // 保存容量の警告しきい値（％）
+function storageUsed(){ return 96 + patients.length; } // 既存データ込みの使用量（想定）
+function storagePct(){ return Math.min(100, Math.round(storageUsed()/STORAGE_CAP*100)); }
+function buildNotifications(){
+  const list=[];
+  // 1. 同期の状態：自動同期が失敗したときだけ警告（成功中は出さない）
+  if(syncFailed){
+    list.push({type:'warn',icon:'⚠️',title:'自動同期に失敗しました',
+      body:`未送信 ${unsentCount} 件。ネットワーク接続をご確認ください。復旧して次の自動同期が成功すると自動で解消します。タップで今すぐ再試行します。`, action:'sync'});
+  }else if(!autoSync && unsentCount>0){
+    list.push({type:'warn',icon:'📤',title:`未送信の記録が ${unsentCount} 件あります`,
+      body:'自動同期がオフです。タップで手動同期します。', action:'sync'});
+  }
+  // 4. 前日以前の下書き
+  const today=dateStr();
+  const oldDrafts=patients.filter(p=>p.status==='draft' && p.dateKey && p.dateKey<today).length;
+  if(oldDrafts>0){
+    list.push({type:'warn',icon:'📝',title:`前日以前の下書きが ${oldDrafts} 件残っています`,
+      body:'未完了のまま放置されています。確認して完了または削除してください。', action:'home'});
+  }
+  // 保存容量
+  const pct=storagePct();
+  if(pct>=capWarnPct){
+    list.push({type:'warn',icon:'🗄️',title:'保存容量が残りわずかです',
+      body:`使用率 約${pct}%（${storageUsed()}/${STORAGE_CAP}件）。不要なカルテを整理してください。`, action:'home'});
+  }
+  list.push({type:'info',icon:'✅',
+    title: !autoSync ? '自動同期はオフです' : (syncFailed ? '同期の再試行を待っています' : '自動同期は正常に動作しています'),
+    body:`最終同期：${new Date(lastSyncMs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}`});
+  return list;
+}
+/* 同期の実行（プロトタイプ：syncFailSim が true なら失敗をシミュレート） */
+function attemptSync(manual){
+  if(syncFailSim){
+    syncFailed=true;
+    updateNotifBadge();
+    if($('notifOverlay').classList.contains('show')) renderNotif();
+    updateSyncStatusLine();
+    if(manual) toast('同期に失敗しました。接続をご確認ください');
+    return false;
+  }
+  unsentCount=0; lastSyncMs=Date.now(); syncFailed=false;
+  updateNotifBadge();
+  if($('notifOverlay').classList.contains('show')) renderNotif();
+  updateSyncStatusLine();
+  if(manual) toast('サーバーと同期しました');
+  return true;
+}
+function autoSyncTick(){ if(autoSync) attemptSync(false); }
+function manualSync(){ attemptSync(true); }
+function syncStatusText(){
+  const last=new Date(lastSyncMs).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+  const state = !autoSync ? '自動同期オフ' : (syncFailed ? '⚠️ 自動同期に失敗' : '✓ 正常');
+  return `状態：${state}／最終同期：${last}／未送信：${unsentCount}件`;
+}
+function updateSyncStatusLine(){ const el=$('syncStatusLine'); if(el) el.textContent=syncStatusText(); }
+function notifWarnCount(){ return buildNotifications().filter(n=>n.type==='warn').length; }
+function updateNotifBadge(){
+  const n=notifWarnCount();
+  const b=$('notifBadge');
+  if(n>0){ b.textContent=n; b.style.display=''; } else { b.style.display='none'; }
+}
+function notifAction(a){ return a==='sync'?'manualSync();':(a==='home'?'closeNotif();showHome();':''); }
+function renderNotif(){
+  const list=buildNotifications();
+  $('notifList').innerHTML = list.map(n=>{
+    const act=notifAction(n.action);
+    return `<div class="notif-item ${n.type}${n.action?' go':''}"${act?` onclick="${act}"`:''}>
+      <div class="notif-ic">${n.icon}</div>
+      <div><div class="notif-tt">${esc(n.title)}</div><div class="notif-bd">${esc(n.body)}</div></div>
+    </div>`;}).join('') || '<div class="notif-list-empty">新しい通知はありません</div>';
+}
+function toggleNotif(){
+  if($('notifOverlay').classList.contains('show')){ closeNotif(); return; }
+  renderNotif(); $('notifOverlay').classList.add('show');
+}
+function closeNotif(){ $('notifOverlay').classList.remove('show'); }
+
+
+/* ============ リセット ============ */
+function resetAll(){
+  [2,3].forEach(n=>{clearInterval(timers[n]);recState[n]=false;recTakes[n]=0;
+    $('timer'+n).classList.remove('on');$('tw'+n).classList.remove('on');$('trans'+n).value='';
+    const b=$('rec'+n+'btn');b.classList.remove('recording');b.disabled=true;
+    b.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2"/></svg> '+(n===2?'録音開始':'録音を再開');
+  });
+  $('pname').value='';$('pno').value='';
+  $('promptSel').value='';$('promptText').value='';
+  $('pname').value='';$('pno').value='';
+  $('promptSel').value='';$('promptText').value='';
+  counselingDone=false;examDone=false;currentOut='soap';outText='';resultReady=false;
+  curProfile=null;curWants=null;currentDraftId=null;lastDraftSig='';
+  $('outBody').removeAttribute('contenteditable');$('outBody').classList.remove('edit');
+  $('ai3btn').querySelector('span').textContent='この内容で実行（作り直し）';
+  ['Profile','Want','Med'].forEach(c=>{$('card'+c).classList.remove('show');$('card'+c).style.display='';});
+  clearMed();
+  $('soapCard').classList.remove('show');$('soapCard').style.display='';
+  $('outCard').classList.remove('show');$('outCard').style.display='none';
+  $('copyBar').classList.remove('show');$('copyAllBtn').style.display='';$('finishBar').classList.remove('show');
+  $('ai3add').style.display='none';step3Baseline=null;
+  ['S','O','A','P'].forEach(k=>{const v=$('val'+k);v.classList.add('pending');
+    v.textContent=(k==='S')?'カウンセリングのAI処理で反映されます':'診察のAI処理で反映されます';});
+  $('resultArea').style.display='none';$('emptyState').style.display='block';
+  $('step1').classList.remove('done');$('step1').classList.add('active');
+  $('stepC').classList.remove('active','done');
+  $('stepE').classList.remove('active','done');
+  $('soapPatient').textContent='— ';$('outPatient').textContent='— ';
+  updateFlow();
+}
+renderMed();
+updateFlow();
+showHome();
+updateNotifBadge();
+refreshStaffHeader();
+</script>
+</body>
+</html>

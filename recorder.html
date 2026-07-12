@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>録音 — AIアシスト</title>
+<style>
+  :root{ --accent:#2a6fdb; --ink:#1a2233; --muted:#6b7280; --line:#e2e7ef; --bg:#f4f7fb;
+         --ok:#1f9d55; --warn:#e07a3a; --danger:#c0392b; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+       background:var(--bg);color:var(--ink);padding:16px;line-height:1.6}
+  .card{max-width:640px;margin:0 auto;background:#fff;border:1px solid var(--line);
+        border-radius:14px;padding:18px;box-shadow:0 6px 24px rgba(20,30,60,.06)}
+  h1{font-size:17px;margin:0 0 4px}
+  .sub{font-size:12px;color:var(--muted);margin-bottom:14px}
+  .who{font-size:12.5px;background:#eef4fd;border:1px solid #d3e2fb;color:#1f5fb0;
+       border-radius:8px;padding:8px 12px;margin-bottom:14px}
+  .rec-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  button{font-family:inherit;font-weight:700;border-radius:10px;cursor:pointer;border:1px solid transparent}
+  .btn-rec{background:var(--danger);color:#fff;border:none;font-size:15px;padding:12px 20px;display:flex;align-items:center;gap:8px}
+  .btn-rec.recording{background:#7a1f16}
+  .btn-rec:disabled{opacity:.5}
+  .btn-ghost{background:#fff;border:1px solid var(--line);color:var(--ink);font-size:13px;padding:9px 14px}
+  .btn-ghost:hover{background:#f5f8fd}
+  .btn-primary{background:var(--accent);color:#fff;border:none;font-size:14px;padding:11px 18px}
+  .btn-primary:disabled{opacity:.5}
+  .timer{font-variant-numeric:tabular-nums;font-weight:700;font-size:15px;color:var(--ink)}
+  .dot{width:10px;height:10px;border-radius:50%;background:#fff;display:inline-block;animation:blink 1s infinite}
+  @keyframes blink{50%{opacity:.3}}
+  .hint{font-size:12px;color:var(--muted);margin:12px 0}
+  .seg-list{margin:14px 0;border:1px solid var(--line);border-radius:10px;overflow:hidden;display:none}
+  .seg-list.on{display:block}
+  .seg{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;font-size:12.5px;border-top:1px solid var(--line)}
+  .seg:first-child{border-top:none}
+  .seg .st{font-weight:700}
+  .st.pending{color:var(--muted)} .st.run{color:var(--accent)} .st.done{color:var(--ok)} .st.failed{color:var(--danger)}
+  .progress{height:8px;background:#eef1f6;border-radius:99px;overflow:hidden;margin:10px 0;display:none}
+  .progress.on{display:block}
+  .progress > i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
+  label{font-size:12px;color:var(--muted);font-weight:700;display:block;margin:14px 0 6px}
+  textarea{width:100%;min-height:150px;border:1px solid var(--line);border-radius:10px;padding:11px;
+           font-family:inherit;font-size:13px;line-height:1.7;resize:vertical}
+  .tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .foot{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+  .msg{font-size:12.5px;margin-top:10px;min-height:18px}
+  .msg.ok{color:var(--ok)} .msg.err{color:var(--danger)}
+  .warn-box{font-size:12px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:8px;padding:9px 12px;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🎙 診療録音</h1>
+  <div class="sub">停止後、3分ごとに区切って文字起こしします（長時間でも安全）。</div>
+  <div class="who" id="who">患者・種別は呼び出し元から引き継がれます。</div>
+
+  <div class="rec-row">
+    <button class="btn-rec" id="recBtn">🎙 録音開始</button>
+    <span class="timer" id="timer">00:00</span>
+    <span id="recDot" style="display:none"><span class="dot"></span></span>
+  </div>
+  <div class="hint">録音中はこの画面を開いたままにしてください（別アプリへの切替や画面ロックで中断する場合があります）。</div>
+
+  <div class="progress" id="progress"><i id="progressBar"></i></div>
+  <div class="seg-list" id="segList"></div>
+
+  <div id="resultArea" style="display:none">
+    <label>文字起こし（編集可）</label>
+    <textarea id="transcript" placeholder="文字起こし結果がここに表示されます"></textarea>
+    <div class="tools">
+      <button class="btn-ghost" id="copyBtn">📋 コピー</button>
+      <button class="btn-ghost" id="dlBtn">⬇ テキスト保存(.txt)</button>
+      <button class="btn-ghost" id="retryBtn" style="display:none">↻ 失敗分を再送</button>
+    </div>
+    <div class="warn-box" id="failWarn" style="display:none">一部のセグメントが失敗しました。「失敗分を再送」で復旧できます。文字起こしは保持されているので消えません。</div>
+  </div>
+
+  <div class="msg" id="msg"></div>
+
+  <div class="foot">
+    <button class="btn-primary" id="useBtn" disabled>この文字起こしを使う →</button>
+    <button class="btn-ghost" id="closeBtn">閉じる</button>
+  </div>
+</div>
+
+<script>
+/*================= 設定（呼び出し元からURLパラメータで受け取る）=================
+  例: recorder.html?api=<GAS URL>&token=<共有トークン>&phase=exam&patient=田中一郎&no=001
+=================================================================================*/
+var Q = new URLSearchParams(location.search);
+var CFG = {
+  api:     Q.get('api')   || '',                 // GAS Web App の /exec URL
+  token:   Q.get('token') || '',                 // 共有トークン
+  phase:   Q.get('phase') || 'exam',             // 'counseling' | 'exam' など（表示・保存用）
+  patient: Q.get('patient') || '',
+  no:      Q.get('no') || '',
+  hint:    Q.get('hint') || ''                    // 用語ヒント（任意）
+};
+var SEGMENT_MS = 3 * 60 * 1000;                   // 3分セグメント
+
+var phaseLabel = (CFG.phase === 'counseling') ? 'カウンセリング' : '診察・相談';
+document.getElementById('who').textContent =
+  '患者：' + (CFG.patient || '(未指定)') + (CFG.no ? '（'+CFG.no+'）' : '') + '　／　種別：' + phaseLabel;
+
+/*================= 状態 =================*/
+var mediaStream=null, recorder=null, chunks=[], segments=[];
+var recording=false, stopRequested=false, segTimer=null, tick=null, seconds=0, mimeType='';
+
+var $ = function(id){ return document.getElementById(id); };
+function setMsg(t, cls){ var m=$('msg'); m.textContent=t||''; m.className='msg'+(cls?(' '+cls):''); }
+
+/*================= 録音対応MIMEの選択（iPad Safari対応）=================*/
+function pickMime(){
+  var cands = ['audio/webm;codecs=opus','audio/webm','audio/mp4;codecs=mp4a.40.2','audio/mp4','audio/aac',''];
+  for(var i=0;i<cands.length;i++){
+    try{ if(cands[i]==='' || (window.MediaRecorder && MediaRecorder.isTypeSupported(cands[i]))) return cands[i]; }catch(e){}
+  }
+  return '';
+}
+
+/*================= 録音開始/停止 =================*/
+$('recBtn').addEventListener('click', function(){
+  if(!recording) startRecording(); else stopRecording();
+});
+
+function startRecording(){
+  if(!CFG.api || !CFG.token){ setMsg('接続先(api)または認証(token)が未設定です。呼び出し元から起動してください。','err'); return; }
+  if(!navigator.mediaDevices || !window.MediaRecorder){ setMsg('この端末/ブラウザは録音に対応していません。','err'); return; }
+  setMsg('');
+  navigator.mediaDevices.getUserMedia({ audio:true }).then(function(stream){
+    mediaStream = stream;
+    mimeType = pickMime();
+    segments = [];
+    stopRequested = false;
+    recording = true;
+    seconds = 0;
+    $('recBtn').textContent = '■ 録音停止';
+    $('recBtn').classList.add('recording');
+    $('recDot').style.display='';
+    $('resultArea').style.display='none';
+    $('useBtn').disabled = true;
+    $('segList').innerHTML=''; $('segList').classList.remove('on');
+    startTick();
+    startSegment();
+  }).catch(function(e){
+    setMsg('マイクを使用できません（権限を確認してください）: ' + e.message, 'err');
+  });
+}
+
+function startSegment(){
+  chunks = [];
+  var opt = mimeType ? { mimeType:mimeType } : undefined;
+  try{ recorder = new MediaRecorder(mediaStream, opt); }
+  catch(e){ recorder = new MediaRecorder(mediaStream); }
+  recorder.ondataavailable = function(ev){ if(ev.data && ev.data.size>0) chunks.push(ev.data); };
+  recorder.onstop = function(){
+    if(chunks.length){
+      var type = (recorder && recorder.mimeType) || mimeType || 'audio/webm';
+      var blob = new Blob(chunks, { type: type });
+      if(blob.size > 0) segments.push({ blob:blob, mime:type, status:'pending', text:'' });
+    }
+    if(!stopRequested){
+      startSegment();               // 続行中 → 次の3分セグメントへ
+    }else{
+      finishRecording();            // 停止要求 → 文字起こしフェーズへ
+    }
+  };
+  recorder.start();
+  if(segTimer) clearTimeout(segTimer);
+  segTimer = setTimeout(function(){ if(!stopRequested && recorder && recorder.state==='recording') recorder.stop(); }, SEGMENT_MS);
+}
+
+function stopRecording(){
+  if(!recording) return;
+  stopRequested = true;
+  recording = false;
+  stopTick();
+  if(segTimer) clearTimeout(segTimer);
+  $('recBtn').disabled = true;
+  $('recBtn').textContent = '処理中…';
+  $('recBtn').classList.remove('recording');
+  $('recDot').style.display='none';
+  if(recorder && recorder.state==='recording'){ recorder.stop(); }
+  else { finishRecording(); }
+}
+
+function finishRecording(){
+  if(mediaStream){ mediaStream.getTracks().forEach(function(t){ t.stop(); }); mediaStream=null; }
+  $('recBtn').disabled=false; $('recBtn').textContent='🎙 追加で録音'; // 追加録音も可能
+  if(!segments.length){ setMsg('録音がありませんでした。','err'); return; }
+  $('resultArea').style.display='';
+  renderSegments();
+  transcribeAll();
+}
+
+/*================= タイマー =================*/
+function startTick(){ stopTick(); tick=setInterval(function(){ seconds++; $('timer').textContent=fmt(seconds); },1000); }
+function stopTick(){ if(tick){ clearInterval(tick); tick=null; } }
+function fmt(s){ var m=Math.floor(s/60), r=s%60; return (m<10?'0':'')+m+':'+(r<10?'0':'')+r; }
+
+/*================= セグメント表示 =================*/
+function renderSegments(){
+  var list=$('segList'); list.classList.add('on');
+  list.innerHTML = segments.map(function(s,i){
+    var label = {pending:'待機',run:'送信中…',done:'完了',failed:'失敗'}[s.status]||'';
+    return '<div class="seg"><span>セグメント '+(i+1)+'（'+approxMin_(s.blob.size)+'）</span>'+
+           '<span class="st '+s.status+'" id="st'+i+'">'+label+'</span></div>';
+  }).join('');
+}
+function approxMin_(bytes){ // ざっくり分表示
+  var kb = bytes/1024; if(kb<1024) return Math.max(1,Math.round(kb))+'KB'; return (kb/1024).toFixed(1)+'MB';
+}
+function setSegStatus(i, st){
+  segments[i].status=st;
+  var el=$('st'+i);
+  if(el){ el.className='st '+st; el.textContent={pending:'待機',run:'送信中…',done:'完了',failed:'失敗'}[st]||''; }
+}
+
+/*================= 文字起こし（B案：停止後に逐次送信）=================*/
+function transcribeAll(){
+  $('progress').classList.add('on');
+  setMsg('文字起こし中…（区切りごとに順次表示されます）');
+  var i=0, prevText='';
+  // すでに完了しているセグメントのテキストを prevText 初期値に
+  segments.forEach(function(s){ if(s.status==='done'&&s.text) prevText=s.text; });
+
+  function next(){
+    // 未処理（pending/failed）を探す
+    while(i<segments.length && segments[i].status==='done'){ prevText=segments[i].text||prevText; i++; }
+    if(i>=segments.length){ return done(); }
+    var idx=i;
+    setSegStatus(idx,'run');
+    updateProgress();
+    blobToBase64(segments[idx].blob).then(function(b64){
+      return postJSON(CFG.api, {
+        action:'transcribe', token:CFG.token,
+        audioBase64:b64, mimeType:segments[idx].mime,
+        filename:'seg'+(idx+1)+'.'+extOf(segments[idx].mime),
+        prompt:CFG.hint, prevText:prevText
+      });
+    }).then(function(res){
+      if(res && res.ok){
+        segments[idx].text = res.text||'';
+        setSegStatus(idx,'done');
+        prevText = segments[idx].text || prevText;
+        rebuildTranscript();
+      }else{
+        setSegStatus(idx,'failed');
+      }
+      i++; updateProgress(); next();
+    }).catch(function(){
+      setSegStatus(idx,'failed');
+      i++; updateProgress(); next();
+    });
+  }
+  next();
+}
+
+function done(){
+  updateProgress();
+  rebuildTranscript();
+  var failed = segments.filter(function(s){return s.status==='failed';}).length;
+  $('useBtn').disabled = false;
+  if(failed>0){
+    setMsg(failed+' 件のセグメントが失敗しました。文字起こしは保持されています。','err');
+    $('retryBtn').style.display=''; $('failWarn').style.display='';
+  }else{
+    setMsg('文字起こしが完了しました。','ok');
+    $('retryBtn').style.display='none'; $('failWarn').style.display='none';
+  }
+}
+
+function updateProgress(){
+  var total=segments.length||1;
+  var doneN=segments.filter(function(s){return s.status==='done'||s.status==='failed';}).length;
+  $('progressBar').style.width = Math.round(doneN/total*100)+'%';
+}
+
+function rebuildTranscript(){
+  var parts = segments.map(function(s,i){
+    if(s.status==='done') return s.text;
+    if(s.status==='failed') return '〔セグメント'+(i+1)+'：文字起こし失敗（再送してください）〕';
+    return '';
+  }).filter(function(x){return x;});
+  $('transcript').value = parts.join('\n');
+}
+
+$('retryBtn').addEventListener('click', function(){
+  // 失敗分を pending に戻して再処理
+  segments.forEach(function(s){ if(s.status==='failed') s.status='pending'; });
+  renderSegments();
+  transcribeAll();
+});
+
+/*================= 文字起こしの保全（コピー / 保存）=================*/
+$('copyBtn').addEventListener('click', function(){
+  var txt=$('transcript').value||'';
+  if(!txt.trim()){ setMsg('文字起こしがありません','err'); return; }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(function(){ setMsg('コピーしました','ok'); }).catch(fallbackCopy);
+  }else fallbackCopy();
+  function fallbackCopy(){ var t=$('transcript'); t.focus(); t.select(); try{document.execCommand('copy');}catch(e){} setMsg('コピーしました','ok'); }
+});
+$('dlBtn').addEventListener('click', function(){
+  var txt=$('transcript').value||'';
+  if(!txt.trim()){ setMsg('文字起こしがありません','err'); return; }
+  var name=(CFG.patient||'患者');
+  var header='患者：'+name+(CFG.no?'（'+CFG.no+'）':'')+'\n種別：'+phaseLabel+'の文字起こし\n作成日：'+dateStr()+'\n'+
+             '────────────────────────\n\n';
+  var blob=new Blob([header+txt],{type:'text/plain;charset=utf-8'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='文字起こし_'+name+'_'+phaseLabel+'_'+dateStr()+'.txt';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+  setMsg('テキスト保存しました','ok');
+});
+
+/*================= 呼び出し元へ返す =================*/
+$('useBtn').addEventListener('click', function(){
+  var payload={ type:'aiassist-transcript', phase:CFG.phase, text:$('transcript').value||'',
+                patient:CFG.patient, no:CFG.no };
+  try{ if(window.opener && !window.opener.closed) window.opener.postMessage(payload,'*'); }catch(e){}
+  setMsg('呼び出し元に文字起こしを渡しました。','ok');
+});
+$('closeBtn').addEventListener('click', function(){ window.close(); });
+
+/*================= 通信・変換ユーティリティ =================*/
+function postJSON(url, obj){
+  // GASのCORSプリフライト回避のため text/plain で送る
+  return fetch(url, {
+    method:'POST',
+    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+    body: JSON.stringify(obj)
+  }).then(function(r){ return r.text(); }).then(function(t){
+    try{ return JSON.parse(t); }catch(e){ return { ok:false, error:'応答解析失敗', raw:t }; }
+  });
+}
+function blobToBase64(blob){
+  return new Promise(function(resolve,reject){
+    var fr=new FileReader();
+    fr.onload=function(){ var s=String(fr.result); var i=s.indexOf(','); resolve(i>=0?s.slice(i+1):s); };
+    fr.onerror=function(){ reject(new Error('read fail')); };
+    fr.readAsDataURL(blob);
+  });
+}
+function extOf(m){ m=(m||'').toLowerCase();
+  if(m.indexOf('webm')>=0)return 'webm'; if(m.indexOf('mp4')>=0||m.indexOf('m4a')>=0||m.indexOf('aac')>=0)return 'm4a';
+  if(m.indexOf('mpeg')>=0||m.indexOf('mp3')>=0)return 'mp3'; if(m.indexOf('wav')>=0)return 'wav'; return 'webm'; }
+function dateStr(){ var d=new Date(); return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); }
+function p2(n){ return (n<10?'0':'')+n; }
+</script>
+</body>
+</html>
