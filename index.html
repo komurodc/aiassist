@@ -706,7 +706,7 @@
      未記入のあいだは、デモ（サンプル）モードで動きます。
    ================================================================== */
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxHcrU2gRV0aTY5C1tFRVL0NFDBG4g4egLhuwsbmVqUScsPckIwCA1sLVsPxX7LIyOc/exec';
-var SHARED_TOKEN = 'kdc-2026ai-assist.08051101';   // ← ここにトークンを貼る
+var SHARED_TOKEN = '__PASTE_YOUR_SHARED_TOKEN__';   // ← ここにトークンを貼る
 var RECORDER_URL = 'recorder.html';                 // 同じGitHub Pages上に置く想定
 
 var USE_REAL_API = (SHARED_TOKEN.indexOf('__PASTE') === -1) && !!SHARED_TOKEN;
@@ -1176,22 +1176,10 @@ function exportBackup(){
 }
 
 /* AI処理後の振り分け結果（プロトタイプ用に固定） */
-let PROFILE = [
-  ["趣味","ゴルフ（最近熱中）。本日もゴルフの帰りに来院"],
-  ["家族構成","お子さま2人（息子・娘）。週末は家族で外出することが多い"],
-  ["来院手段","電車"]
-];
-let WANTS = [
-  "前歯の<b>審美希望</b>：色を白くしたい意向あり（見た目を相談したい）",
-  "治療説明は<b>丁寧さ・満足度</b>を重視（要望を会計時の次回提案につなげる）"
-];
+let PROFILE = [];
+let WANTS = [];
 /* 治療相談（直接録音）の雑談から抽出する患者プロフィール */
-let ORTHO_PROFILE = [
-  ["職業","営業職（人と話す機会が多い）"],
-  ["趣味","テニス（休日によくプレー）"],
-  ["ライフイベント","来年春に結婚式を予定。矯正を希望する主な動機"],
-  ["家族構成","婚約者と相談して治療を検討（来年結婚予定）"]
-];
+let ORTHO_PROFILE = [];
 let SOAP = {
   S:`・主訴：右下奥歯の詰め物が脱離。冷水痛あり、咬合時に違和感（響く）。
 ・自発痛なし。
@@ -1713,26 +1701,58 @@ async function confirmA4Save(){
 }
 window.addEventListener('resize',()=>{ if($('a4Overlay').classList.contains('show')) fitA4Scale(); });
 
+/* ============ サーバー永続化（GAS：スプレッドシート保存・共有） ============ */
+function recToServer_(rec){
+  var r = Object.assign({}, rec);
+  r.key = rec.id;
+  r.patientName = rec.name || '';
+  r.chartNumber = rec.no || '';
+  r.flowMode = rec.mode || '';
+  r.completed = (rec.status === 'done');
+  return r;
+}
+function saveRecordToServer(rec){
+  if(!USE_REAL_API || !rec || !rec.id) return Promise.resolve();
+  return gasPost({ action:'saveKarte', record: recToServer_(rec) })
+    .catch(function(e){ console.warn('saveKarte失敗', e); toast('保存の同期に失敗: '+e.message); });
+}
+function deleteRecordFromServer(id){
+  if(!USE_REAL_API || !id) return Promise.resolve();
+  return gasPost({ action:'deleteKarte', key:id })
+    .catch(function(e){ console.warn('deleteKarte失敗', e); });
+}
+function fmtDateFromTs_(ts){
+  try{ return new Date(ts).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}); }
+  catch(e){ return ''; }
+}
+function loadPatientsFromServer(){
+  if(!USE_REAL_API){ renderPatients(); return; }
+  gasPost({ action:'listKarte' }).then(function(d){
+    var items = d.items || [];
+    patients = items.map(function(it){
+      return { id:it.key, no:it.chartNumber, name:it.patientName, mode:it.flowMode,
+               status: it.completed ? 'done' : 'draft',
+               date: fmtDateFromTs_(it.timestamp), _summary:true };
+    });
+    renderPatients();
+  }).catch(function(e){ console.warn('listKarte失敗', e); renderPatients(); });
+}
+
 /* ============ ホーム（患者リスト） ============ */
-let patients=[
-  { id:'demo1', no:'000098', name:'田中 一郎', date:'2026年6月8日', mode:'soap', status:'done',
-    soap:{S:'・主訴：左下の歯ぐきが腫れて痛む。\n・冷温痛なし。',O:'・左下7番 歯肉腫脹、軽度動揺。歯周ポケット5mm。\n・X-P：水平性骨吸収。',A:'・慢性歯周炎（中等度）。',P:'・本日SRP施行。次回再評価。'},
-    profile:[['趣味','釣り'],['家族構成','妻と二人暮らし']], meds:['糖尿病','抗血栓薬服用'], wants:null },
-  { id:'demo2', no:'000102', name:'鈴木 美咲', date:'2026年6月8日', mode:'ortho', status:'done',
-    ortho:[{t:'相談内容・主訴／ご希望',b:'・前歯の出っ歯が気になる。結婚式前に整えたい。'},{t:'説明内容（治療の内容・手順）',b:'・マウスピース矯正を提案。期間 約2年。'},{t:'料金説明',b:'・総額85万円（税込）／自費。分割可。'},{t:'決定事項・次回予定',b:'・次回 精密検査を予約。'}],
-    profile:[['趣味','ヨガ'],['ライフイベント','来年結婚を予定']], meds:[], wants:null },
-  { id:'demo3', no:'000110', name:'高橋 健', date:'2026年6月9日', dateKey:'2026-06-09', mode:'soap', status:'draft',
-    promptText:'', trans2:'（カウンセリング録音の文字起こし途中…）', trans3:'',
-    counselingDone:true, examDone:false, resultReady:false, meds:['高血圧症'] }
-];
+/* 患者リストはGAS（スプレッドシート）から読み込む。初期は空。 */
+let patients=[];
 let detailId=null;
 
 function showHome(){
-  saveDraftIfNeeded();
+  const savedDraft=saveDraftIfNeeded();
   $('homeView').style.display='';
   $('assistView').style.display='none';
   $('navHome').classList.add('active');
-  renderPatients();
+  if(savedDraft && USE_REAL_API){
+    saveRecordToServer(savedDraft).then(loadPatientsFromServer);
+  }else{
+    loadPatientsFromServer();
+  }
 }
 function showAssist(isNew){
   if(isNew) resetAll();
@@ -1773,11 +1793,12 @@ function saveDraftIfNeeded(){
   else patients.unshift(d);
   currentDraftId=d.id; lastDraftSig=sig;
   updateNotifBadge();
-  return true;
+  return d;
 }
 /* 一定時間ごとの自動保存（編集画面にいて、内容に変更があれば） */
 function autosaveTick(){
-  if(saveDraftIfNeeded()){ toast('下書きを自動保存しました'); }
+  const d=saveDraftIfNeeded();
+  if(d){ saveRecordToServer(d); toast('下書きを自動保存しました'); }
 }
 setInterval(autosaveTick, 20000);
 setInterval(autoSyncTick, 30000); // 自動同期（プロトタイプでは体感用に30秒間隔／実機は設定の分間隔）
@@ -1828,25 +1849,39 @@ function confirmDeletePatient(id){
     patients=patients.filter(x=>x.id!==id);
     if(currentDraftId===id) currentDraftId=null;
     renderPatients(); toast('記録を削除しました');
+    deleteRecordFromServer(id).then(loadPatientsFromServer);
   }, '削除する');
 }
 function savePatient(){
   if(!resultReady){toast('先にAI処理を実行してください');return}
   const rec=getCurrentRecord(); rec.status='done';
-  if(currentDraftId){ patients=patients.filter(p=>p.id!==currentDraftId); currentDraftId=null; }
+  if(currentDraftId){ patients=patients.filter(p=>p.id!==currentDraftId); rec.id=currentDraftId; currentDraftId=null; }
   patients.unshift(rec);
   unsentCount++;
-  toast('患者リストに保存しました');
-  resetAll();
-  showHome();
+  saveRecordToServer(rec).then(function(){
+    toast('患者リストに保存しました');
+    resetAll();
+    showHome();
+  });
 }
 function openPatient(id){
-  const rec=patients.find(p=>p.id===id); if(!rec) return;
-  if(rec.status==='draft'){ resumeDraft(rec); return; }   // 下書きは編集再開
-  detailId=id;
-  $('patientTitle').textContent=`${rec.name} さんの記録`;
-  $('patientDetail').innerHTML=recordBodyHTML(rec);
-  $('patientOverlay').classList.add('show');
+  const p=patients.find(x=>x.id===id); if(!p) return;
+  if(!USE_REAL_API){
+    if(p.status==='draft'){ resumeDraft(p); return; }
+    detailId=id;
+    $('patientTitle').textContent=`${p.name} さんの記録`;
+    $('patientDetail').innerHTML=recordBodyHTML(p);
+    $('patientOverlay').classList.add('show');
+    return;
+  }
+  gasPost({action:'getKarte', key:id}).then(function(d){
+    const rec=d.record||p;
+    if(rec.status==='draft' || rec.completed===false){ resumeDraft(rec); return; }
+    detailId=id;
+    $('patientTitle').textContent=`${rec.name||rec.patientName||''} さんの記録`;
+    $('patientDetail').innerHTML=recordBodyHTML(rec);
+    $('patientOverlay').classList.add('show');
+  }).catch(function(e){ toast('読み込みに失敗: '+e.message); });
 }
 function closePatient(){ $('patientOverlay').classList.remove('show'); detailId=null; }
 function copyPatient(){
@@ -1859,8 +1894,10 @@ function a4FromPatient(){
 }
 function deletePatient(){
   if(!detailId) return;
-  patients=patients.filter(p=>p.id!==detailId);
+  const id=detailId;
+  patients=patients.filter(p=>p.id!==id);
   closePatient(); renderPatients(); toast('記録を削除しました');
+  deleteRecordFromServer(id).then(loadPatientsFromServer);
 }
 
 /* ============ 通知（システム） ============ */
@@ -1957,6 +1994,7 @@ function resetAll(){
   $('promptSel').value='';$('promptText').value='';
   counselingDone=false;examDone=false;currentOut='soap';outText='';resultReady=false;
   curProfile=null;curWants=null;currentDraftId=null;lastDraftSig='';
+  PROFILE=[];WANTS=[];ORTHO_PROFILE=[];   // 前の患者の抽出内容を持ち越さない
   $('outBody').removeAttribute('contenteditable');$('outBody').classList.remove('edit');
   $('ai3btn').querySelector('span').textContent='この内容で実行（作り直し）';
   ['Profile','Want','Med'].forEach(c=>{$('card'+c).classList.remove('show');$('card'+c).style.display='';});
