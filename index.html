@@ -706,7 +706,7 @@
      未記入のあいだは、デモ（サンプル）モードで動きます。
    ================================================================== */
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxHcrU2gRV0aTY5C1tFRVL0NFDBG4g4egLhuwsbmVqUScsPckIwCA1sLVsPxX7LIyOc/exec';
-var SHARED_TOKEN = 'kdc-2026ai-assist.08051101';   // ← ここにトークンを貼る
+var SHARED_TOKEN = '__PASTE_YOUR_SHARED_TOKEN__';   // ← ここにトークンを貼る
 var RECORDER_URL = 'recorder.html';                 // 同じGitHub Pages上に置く想定
 
 var USE_REAL_API = (SHARED_TOKEN.indexOf('__PASTE') === -1) && !!SHARED_TOKEN;
@@ -726,6 +726,7 @@ function gasGenerate(mode, transcript, counseling){
 }
 
 /* 録音ページを開く（n=2:カウンセリング / n=3:診察・相談） */
+var _recWin = null;
 function openRealRecorder(n){
   var phase = (n===2) ? 'counseling' : 'exam';
   var patient = ($('pname') ? ($('pname').value||'') : '');
@@ -736,8 +737,19 @@ function openRealRecorder(n){
     + '&phase=' + encodeURIComponent(phase)
     + '&patient=' + encodeURIComponent(patient)
     + '&no=' + encodeURIComponent(no);
-  var w = window.open(u, 'aiassist_recorder', 'width=680,height=760');
-  if(!w) toast('ポップアップがブロックされました。許可してください。');
+  // 既に録音タブが開いていれば、そのタブを新しい内容にして前面へ。無ければ新規に開く。
+  try{
+    if(_recWin && !_recWin.closed){
+      _recWin.location.href = u;
+      _recWin.focus();
+      toast('録音ページを開きました');
+      return;
+    }
+  }catch(e){ /* 参照が無効なら新規に開く */ }
+  _recWin = window.open(u, 'aiassist_recorder', 'width=680,height=760');
+  if(!_recWin){ toast('ポップアップがブロックされました。ブラウザの設定で許可してください。'); return; }
+  try{ _recWin.focus(); }catch(e){}
+  toast('録音ページを開きました');
 }
 
 /* 録音ページからの文字起こしを受け取る（複数回は自動追記） */
