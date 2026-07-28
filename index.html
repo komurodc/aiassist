@@ -706,7 +706,7 @@
      未記入のあいだは、デモ（サンプル）モードで動きます。
    ================================================================== */
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxHcrU2gRV0aTY5C1tFRVL0NFDBG4g4egLhuwsbmVqUScsPckIwCA1sLVsPxX7LIyOc/exec';
-var SHARED_TOKEN = 'kdc-2026ai-assist.08051101';   // ← ここにトークンを貼る
+var SHARED_TOKEN = '__PASTE_YOUR_SHARED_TOKEN__';   // ← ここにトークンを貼る
 var RECORDER_URL = 'recorder.html';                 // 同じGitHub Pages上に置く想定
 
 var USE_REAL_API = (SHARED_TOKEN.indexOf('__PASTE') === -1) && !!SHARED_TOKEN;
@@ -752,13 +752,27 @@ function openRealRecorder(n){
   toast('録音ページを開きました');
 }
 
-/* 録音ページからの文字起こしを受け取る（複数回は自動追記） */
+/* 録音ページからの文字起こしを受け取る
+   - replace:true（新recorder） … 録音ページの全文で置き換え（追加録音しても二重にならない）
+   - それ以外（手入力分は保持）  … 末尾に追記 */
+var _recorderText = { 2:'', 3:'' };   // 録音ページ由来の本文（phaseごと）
 window.addEventListener('message', function(ev){
   var d = ev.data; if(!d || d.type!=='aiassist-transcript') return;
   var n = (d.phase==='counseling') ? 2 : 3;
   var el = $('trans'+n); if(!el) return;
-  var cur = (el.value||'').replace(/\s+$/,'');
-  el.value = cur ? (cur + '\n\n―― 追加録音 ――\n' + (d.text||'')) : (d.text||'');
+  var incoming = d.text||'';
+  if(d.replace){
+    var cur = el.value||'';
+    var prev = _recorderText[n]||'';
+    // 画面上の「録音ページ由来の部分」だけを差し替え、手入力メモがあれば残す
+    if(prev && cur.indexOf(prev)>=0){ el.value = cur.replace(prev, incoming); }
+    else { el.value = cur.trim() ? (cur.replace(/\s+$/,'') + '\n\n' + incoming) : incoming; }
+    _recorderText[n] = incoming;
+  }else{
+    var c = (el.value||'').replace(/\s+$/,'');
+    el.value = c ? (c + '\n\n―― 追加録音 ――\n' + incoming) : incoming;
+    _recorderText[n] = el.value;
+  }
   var tw = $('tw'+n); if(tw) tw.classList.add('on');
   toast('文字起こしを取り込みました');
 });
@@ -1754,6 +1768,7 @@ function loadPatientsFromServer(){
 /* 患者リストはGAS（スプレッドシート）から読み込む。初期は空。 */
 let patients=[];
 let detailId=null;
+let detailRec=null;   // 詳細表示中の全文レコード（A4保存・コピー用）
 
 function showHome(){
   const savedDraft=saveDraftIfNeeded();
@@ -1880,7 +1895,7 @@ function openPatient(id){
   const p=patients.find(x=>x.id===id); if(!p) return;
   if(!USE_REAL_API){
     if(p.status==='draft'){ resumeDraft(p); return; }
-    detailId=id;
+    detailId=id; detailRec=p;
     $('patientTitle').textContent=`${p.name} さんの記録`;
     $('patientDetail').innerHTML=recordBodyHTML(p);
     $('patientOverlay').classList.add('show');
@@ -1889,7 +1904,7 @@ function openPatient(id){
   gasPost({action:'getKarte', key:id}).then(function(d){
     const rec=d.record||p;
     if(rec.status==='draft' || rec.completed===false){ resumeDraft(rec); return; }
-    detailId=id;
+    detailId=id; detailRec=rec;
     $('patientTitle').textContent=`${rec.name||rec.patientName||''} さんの記録`;
     $('patientDetail').innerHTML=recordBodyHTML(rec);
     $('patientOverlay').classList.add('show');
@@ -1897,11 +1912,11 @@ function openPatient(id){
 }
 function closePatient(){ $('patientOverlay').classList.remove('show'); detailId=null; }
 function copyPatient(){
-  const rec=patients.find(p=>p.id===detailId); if(!rec) return;
+  const rec=detailRec||patients.find(p=>p.id===detailId); if(!rec) return;
   doCopy(buildAll(rec),'記録をコピーしました');
 }
 function a4FromPatient(){
-  const rec=patients.find(p=>p.id===detailId); if(!rec) return;
+  const rec=detailRec||patients.find(p=>p.id===detailId); if(!rec) return;
   openA4Preview(rec);
 }
 function deletePatient(){
@@ -2007,6 +2022,7 @@ function resetAll(){
   counselingDone=false;examDone=false;currentOut='soap';outText='';resultReady=false;
   curProfile=null;curWants=null;currentDraftId=null;lastDraftSig='';
   PROFILE=[];WANTS=[];ORTHO_PROFILE=[];   // 前の患者の抽出内容を持ち越さない
+  _recorderText={2:'',3:''};              // 録音ページ由来テキストの記録もリセット
   $('outBody').removeAttribute('contenteditable');$('outBody').classList.remove('edit');
   $('ai3btn').querySelector('span').textContent='この内容で実行（作り直し）';
   ['Profile','Want','Med'].forEach(c=>{$('card'+c).classList.remove('show');$('card'+c).style.display='';});
