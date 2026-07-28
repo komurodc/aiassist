@@ -105,6 +105,8 @@ document.getElementById('who').textContent =
 /*================= 状態 =================*/
 var mediaStream=null, recorder=null, chunks=[], segments=[];
 var recording=false, stopRequested=false, segTimer=null, tick=null, seconds=0, mimeType='';
+var takeNo=0;          // 録音回数（追加録音のたびに +1）
+var sentUpTo=0;        // 呼び出し元へ渡し済みのセグメント数（重複送信の防止）
 
 var $ = function(id){ return document.getElementById(id); };
 function setMsg(t, cls){ var m=$('msg'); m.textContent=t||''; m.className='msg'+(cls?(' '+cls):''); }
@@ -130,16 +132,15 @@ function startRecording(){
   navigator.mediaDevices.getUserMedia({ audio:true }).then(function(stream){
     mediaStream = stream;
     mimeType = pickMime();
-    segments = [];
+    // ★ segments は消さない（追加録音：前回までの文字起こしを保持したまま録り足す）
     stopRequested = false;
     recording = true;
     seconds = 0;
+    takeNo++;                       // この録音セッションの番号
     $('recBtn').textContent = '■ 録音停止';
     $('recBtn').classList.add('recording');
     $('recDot').style.display='';
-    $('resultArea').style.display='none';
     $('useBtn').disabled = true;
-    $('segList').innerHTML=''; $('segList').classList.remove('on');
     startTick();
     startSegment();
   }).catch(function(e){
@@ -157,7 +158,7 @@ function startSegment(){
     if(chunks.length){
       var type = (recorder && recorder.mimeType) || mimeType || 'audio/webm';
       var blob = new Blob(chunks, { type: type });
-      if(blob.size > 0) segments.push({ blob:blob, mime:type, status:'pending', text:'' });
+      if(blob.size > 0) segments.push({ blob:blob, mime:type, status:'pending', text:'', take:takeNo });
     }
     if(!stopRequested){
       startSegment();               // 続行中 → 次の3分セグメントへ
@@ -278,9 +279,15 @@ function updateProgress(){
 
 function rebuildTranscript(){
   var parts = segments.map(function(s,i){
-    if(s.status==='done') return s.text;
-    if(s.status==='failed') return '〔セグメント'+(i+1)+'：文字起こし失敗（再送してください）〕';
-    return '';
+    var body = '';
+    if(s.status==='done') body = s.text;
+    else if(s.status==='failed') body = '〔セグメント'+(i+1)+'：文字起こし失敗（再送してください）〕';
+    else return '';
+    // 追加録音の開始位置には区切りを入れる（1本目は除く）
+    if(s.take && i>0 && segments[i-1] && segments[i-1].take !== s.take){
+      body = '―― 追加録音 ――\n' + body;
+    }
+    return body;
   }).filter(function(x){return x;});
   $('transcript').value = parts.join('\n');
 }
@@ -317,10 +324,11 @@ $('dlBtn').addEventListener('click', function(){
 
 /*================= 呼び出し元へ返す =================*/
 $('useBtn').addEventListener('click', function(){
+  // replace:true = この録音ページで作った全文で置き換える（追加録音後に再度押しても二重にならない）
   var payload={ type:'aiassist-transcript', phase:CFG.phase, text:$('transcript').value||'',
-                patient:CFG.patient, no:CFG.no };
+                patient:CFG.patient, no:CFG.no, replace:true };
   try{ if(window.opener && !window.opener.closed) window.opener.postMessage(payload,'*'); }catch(e){}
-  setMsg('呼び出し元に文字起こしを渡しました。','ok');
+  setMsg('呼び出し元に文字起こしを渡しました。追加で録音して、もう一度渡すこともできます。','ok');
 });
 $('closeBtn').addEventListener('click', function(){ window.close(); });
 
