@@ -706,7 +706,7 @@
      未記入のあいだは、デモ（サンプル）モードで動きます。
    ================================================================== */
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxHcrU2gRV0aTY5C1tFRVL0NFDBG4g4egLhuwsbmVqUScsPckIwCA1sLVsPxX7LIyOc/exec';
-var SHARED_TOKEN = 'kdc-2026ai-assist.08051101';   // ← ここにトークンを貼る
+var SHARED_TOKEN = '__PASTE_YOUR_SHARED_TOKEN__';   // ← ここにトークンを貼る
 var RECORDER_URL = 'recorder.html';                 // 同じGitHub Pages上に置く想定
 
 var USE_REAL_API = (SHARED_TOKEN.indexOf('__PASTE') === -1) && !!SHARED_TOKEN;
@@ -1885,8 +1885,9 @@ function savePatient(){
   const rec=getCurrentRecord(); rec.status='done';
   if(currentDraftId){ patients=patients.filter(p=>p.id!==currentDraftId); rec.id=currentDraftId; currentDraftId=null; }
   patients.unshift(rec);
-  unsentCount++;
-  saveRecordToServer(rec).then(function(){
+  saveRecordToServer(rec).then(function(res){
+    // res が falsy = 保存の同期に失敗（saveRecordToServer が catch で undefined を返す）
+    if(USE_REAL_API && !res){ unsentCount++; updateNotifBadge(); }
     toast('患者リストに保存しました');
     resetAll();
     showHome();
@@ -1929,9 +1930,9 @@ function deletePatient(){
 }
 
 /* ============ 通知（システム） ============ */
-let STORAGE_CAP=120; // 保存上限（件・プロトタイプ用の想定値）
+let STORAGE_CAP=500; // 保存上限（件）※運用に合わせて設定画面で変更可
 let capWarnPct=80;   // 保存容量の警告しきい値（％）
-function storageUsed(){ return 96 + patients.length; } // 既存データ込みの使用量（想定）
+function storageUsed(){ return patients.length; }   // 実際の保存件数
 function storagePct(){ return Math.min(100, Math.round(storageUsed()/STORAGE_CAP*100)); }
 function buildNotifications(){
   const list=[];
