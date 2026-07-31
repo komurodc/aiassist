@@ -706,7 +706,7 @@
      未記入のあいだは、デモ（サンプル）モードで動きます。
    ================================================================== */
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxHcrU2gRV0aTY5C1tFRVL0NFDBG4g4egLhuwsbmVqUScsPckIwCA1sLVsPxX7LIyOc/exec';
-var SHARED_TOKEN = 'kdc-2026ai-assist.08051101';   // ← ここにトークンを貼る
+var SHARED_TOKEN = '__PASTE_YOUR_SHARED_TOKEN__';   // ← ここにトークンを貼る
 var RECORDER_URL = 'recorder.html';                 // 同じGitHub Pages上に置く想定
 
 var USE_REAL_API = (SHARED_TOKEN.indexOf('__PASTE') === -1) && !!SHARED_TOKEN;
@@ -720,8 +720,9 @@ function gasPost(payload){
     .then(function(t){ var d; try{ d=JSON.parse(t); }catch(e){ throw new Error('応答の解析に失敗'); }
       if(!d.ok) throw new Error(d.error||'APIエラー'); return d; });
 }
-function gasGenerate(mode, transcript, counseling){
-  return gasPost({ action:'generate', mode:mode, transcript:transcript, counseling:counseling||'' })
+function gasGenerate(mode, transcript, counseling, extraPrompt){
+  return gasPost({ action:'generate', mode:mode, transcript:transcript,
+                   counseling:counseling||'', extraPrompt:extraPrompt||'' })
          .then(function(d){ return d.record; });
 }
 
@@ -1375,7 +1376,7 @@ function runCounseling(){
   if(USE_REAL_API){
     const t=($('trans2').value||'').trim();
     if(!t){ btn.disabled=false; btn.innerHTML=orig; toast('先に録音（文字起こし）を行ってください'); return; }
-    gasGenerate('counseling', t).then(rec=>{
+    gasGenerate('counseling', t, '', ($('promptText')?$('promptText').value:'')).then(rec=>{
       applyGenResult('counseling', rec);
       btn.disabled=false; btn.innerHTML=orig;
       applyCounseling();
@@ -1452,7 +1453,7 @@ function doRunStep3(mode){
     if(!t){ btn.disabled=false; btn.innerHTML=orig; toast('先に録音（文字起こし）を行ってください'); return; }
     const apiMode=(mode==='soap')?'exam':mode;
     const counseling=($('trans2')?$('trans2').value:'')||'';
-    gasGenerate(apiMode, t, counseling).then(rec=>{
+    gasGenerate(apiMode, t, counseling, ($('promptText')?$('promptText').value:'')).then(rec=>{
       applyGenResult(mode, rec);
       btn.disabled=false; btn.innerHTML=orig;
       applyStep3(mode);
@@ -1476,7 +1477,7 @@ function appendStep3(){
     if(!t){ btn.disabled=false; btn.innerHTML=orig; toast('文字起こしがありません'); return; }
     const apiMode=(mode==='soap')?'exam':mode;
     const counseling=($('trans2')?$('trans2').value:'')||'';
-    gasGenerate(apiMode, t, counseling).then(rec=>{
+    gasGenerate(apiMode, t, counseling, ($('promptText')?$('promptText').value:'')).then(rec=>{
       applyGenResult(mode, rec);
       btn.disabled=false; btn.innerHTML=orig;
       renderAppendStep3(mode);
